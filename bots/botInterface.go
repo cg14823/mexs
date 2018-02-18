@@ -5,20 +5,36 @@ import (
 )
 
 type RobotCore struct {
-	TraderID      int
-	Type          string
+	TraderID int
+	// Trade algorithm used for now options are
+	// ZIC
+	Type string
+	// This is used for the simple case where robot can
+	// only be seller or a buyer but not change
+	// to allow change we use TradeOrder.Type
+	// for a seller all TradeOrder.Type = "ASK"
+	// for buyer all TradeOrder.Type = "BID" in simple case
 	SellerOrBuyer string
-	Balance       string
-	Orders        []*TraderOrder
-	TradeRecord   []*common.Trade
-	MarketInfo    common.MartketInfo
-	ActiveOrders  map[int]*common.Order
+	// Orders to be executed by agent
+	ExecutionOrders []*TraderOrder
+	// Trades performed by that agent
+	TradeRecord []*common.Trade
+	// Stores market information
+	MarketInfo common.MartketInfo
+	// Orders currently in the market by the agents
+	// Unused for know
+	ActiveOrders map[int]*common.Order
+	// Balance is money made by the agent
+	// Balance = LimitPrice - transaction price
+	Balance int
 }
 
 // TraderOrders encapsulate what the traders are supposed to do
 type TraderOrder struct {
 	LimitPrice int
-	Quantity   int
+	// Quantity for now will be set to 1 it can be change
+	// for more complicated simulations
+	Quantity int
 	// Type should be BID or ASK
 	Type string
 }
@@ -37,10 +53,12 @@ func (to *TraderOrder) IsAsk() bool {
 }
 
 type RobotTrader interface {
+	InitRobotCore(id int, algo string, sellerOrBuyer string)
 	GetOrder(timeStep int) *common.Order
-	MarketUpdate()
-	TradeMade(trade common.Trade) bool
+	// Append execution order to array
 	AddOrder(order *TraderOrder)
 	// Remove first Order
 	RemoveOrder() error
+	TradeMade(trade *common.Trade) bool
+	MarketUpdate(info *common.MartketInfo)
 }

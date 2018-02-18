@@ -17,6 +17,7 @@ type AuctionParameters struct {
 	// same trader is allowed to put in a bid/ask again 0 means no dominance
 	Dominance int
 	// OrderQueueing is the number of orders one trader can have queued
+	// for now fixed to 1
 	OrderQueuing int
 }
 
