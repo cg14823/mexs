@@ -11,13 +11,13 @@ type ZICTrader struct {
 	Info *RobotCore
 }
 
-func (t *ZICTrader) InitRobotCore(id int, algo string, sellerOrBuyer string) {
+func (t *ZICTrader) InitRobotCore(id int, algo string, sellerOrBuyer string, marketInfo common.MarketInfo) {
 	t.Info = &RobotCore{
 		TraderID:        id,
 		Type:            algo,
 		SellerOrBuyer:   sellerOrBuyer,
 		ExecutionOrders: []*TraderOrder{},
-		MarketInfo:      common.MartketInfo{},
+		MarketInfo:      marketInfo,
 		ActiveOrders:    map[int]*common.Order{},
 		Balance:         0,
 	}
@@ -113,7 +113,7 @@ func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
 	return true
 }
 
-func (t *ZICTrader) MarketUpdate(info *common.MartketInfo) {
+func (t *ZICTrader) MarketUpdate(info *common.MarketUpdate) {
 	// ZIC trader does not care about market data
 	return
 }

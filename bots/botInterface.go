@@ -20,7 +20,7 @@ type RobotCore struct {
 	// Trades performed by that agent
 	TradeRecord []*common.Trade
 	// Stores market information
-	MarketInfo common.MartketInfo
+	MarketInfo common.MarketInfo
 	// Orders currently in the market by the agents
 	// Unused for know
 	ActiveOrders map[int]*common.Order
@@ -53,12 +53,13 @@ func (to *TraderOrder) IsAsk() bool {
 }
 
 type RobotTrader interface {
-	InitRobotCore(id int, algo string, sellerOrBuyer string)
-	GetOrder(timeStep int) *common.Order
+	InitRobotCore(id int, algo string, sellerOrBuyer string, marketInfo common.MarketInfo)
+
 	// Append execution order to array
 	AddOrder(order *TraderOrder)
 	// Remove first Order
 	RemoveOrder() error
 	TradeMade(trade *common.Trade) bool
-	MarketUpdate(info *common.MartketInfo)
+	MarketUpdate(update *common.MarketUpdate)
+	GetOrder(timeStep int) *common.Order
 }

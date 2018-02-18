@@ -1,19 +1,28 @@
 package common
 
-import "time"
+import (
+	"time"
+	"fmt"
+)
 
 // This is other parameters from the market
 // It should be change to use time.Time for async version
-type MartketInfo struct {
+type MarketInfo struct {
 	MaxPrice int
 	MinPrice int
-	TimeStep int
 	// MarketEnd defines the time step at which the market ends
 	MarketEnd int
-	BestBid   int
-	BestAsk   int
-	Orders    []*Order
-	Trades    []*Trade
+	// Number of trading days
+	TradingDays int
+}
+
+type MarketUpdate struct {
+	TimeStep int
+	BestAsk  int
+	BestBid  int
+	Bids     []*Order
+	Asks     []*Order
+	Trades   []*Trade
 }
 
 type Order struct {
@@ -25,6 +34,7 @@ type Order struct {
 	TimeStep  int
 	Time      time.Time
 }
+
 
 // For sorting lists of orders
 type ByPrice []*Order

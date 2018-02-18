@@ -18,8 +18,16 @@ type OrderBookHalf struct {
 	BestPrice int
 	// traders offering best price uninitialized
 	BestOrders []*common.Order
-	// Max Depth
+	// Max Depth ignored for now
 	MaxDepth int
+}
+
+func (ob *OrderBookHalf) init(bookType string, maxDepth int) {
+	ob.BookType = bookType
+	ob.MaxDepth = maxDepth
+	ob.Orders = make(map[int]*common.Order)
+	ob.BestPrice = -1
+	ob.BestOrders = make([]*common.Order, 0)
 }
 
 func (ob *OrderBookHalf) AddOrder(order *common.Order) error {
@@ -111,6 +119,14 @@ type OrderBook struct {
 	tradeRecord []*common.Trade
 }
 
+func (ob *OrderBook) Init() {
+	ob.askBook = OrderBookHalf{}
+	ob.askBook.init("ASK", 100)
+	ob.bidBook = OrderBookHalf{}
+	ob.bidBook.init("BID", 100)
+	ob.tradeRecord = make([]*common.Trade, 0)
+}
+
 func (ob *OrderBook) AddOrder(order *common.Order) error {
 
 	if !order.IsValid() {
@@ -174,11 +190,11 @@ func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, er
 		return false, &common.Order{}, &common.Order{}, bidError
 	}
 
-	if ob.bidBook.BestPrice < 0  && ob.askBook.BestPrice < 0 {
+	if ob.bidBook.BestPrice < 0 && ob.askBook.BestPrice < 0 {
 		return false, &common.Order{}, &common.Order{}, nil
 	}
 
-	if ob.bidBook.BestPrice >= ob.askBook.BestPrice{
+	if ob.bidBook.BestPrice >= ob.askBook.BestPrice {
 		// Possible trade can be made
 		return true, ob.bidBook.BestOrders[0], ob.askBook.BestOrders[0], nil
 	}

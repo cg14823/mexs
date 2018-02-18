@@ -1,6 +1,13 @@
 package exchange
 
-import "mexs/bots"
+import (
+	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
+	"math/rand"
+	"mexs/bots"
+	"mexs/common"
+	"time"
+)
 
 // AuctionParameters are the ones to be evolved by the GA
 type AuctionParameters struct {
@@ -26,8 +33,73 @@ type AuctionParameters struct {
 *   - StartUp
 *   -
  */
-type Exchange interface {
-	StartUp(id int, auctionParameters AuctionParameters)
-	StartOrderBook()
-	UpdateTraders([]*bots.RobotTrader)
+type Exchange struct {
+	GAVector  AuctionParameters
+	Info      common.MarketInfo
+	orderBook OrderBook
+	agents    map[int]bots.RobotTrader
+	AgentNum  int
+}
+
+func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo) {
+	ex.GAVector = GAVector
+	ex.Info = Info
+	ex.orderBook = OrderBook{}
+	ex.orderBook.Init()
+	ex.agents = make(map[int]bots.RobotTrader)
+	ex.AgentNum = 0
+}
+
+func (ex *Exchange) SetTraders(traders map[int]bots.RobotTrader) {
+	ex.agents = traders
+	ex.AgentNum = len(traders)
+}
+
+func (ex *Exchange) PriceMatch (bid, ask *common.Order) *common.Trade{
+	// TODO: Finish this function
+	return &common.Trade{}
+}
+
+func (ex *Exchange) MakeTrades() {
+	// TODO: FINISH this function
+}
+
+func (ex *Exchange) StartExperiment() {
+
+	experimentID := uuid.New()
+
+	log.WithFields(log.Fields{
+		"Trading days":  ex.Info.TradingDays,
+		"Training days": ex.Info.MarketEnd,
+		"Num. Traders":  len(ex.agents),
+		"ID":            experimentID,
+	}).Info("Market experiment started")
+
+	rand.Seed(time.Now().UTC().UnixNano())
+	for d := 0; d < ex.Info.TradingDays; d++ {
+		log.Info("Trading day %d", d)
+		for t := 0; t < ex.Info.MarketEnd; t++ {
+			log.Info("Time-step: %d", t)
+
+			traderIndex := rand.Intn(ex.AgentNum)
+			var agent bots.RobotTrader = ex.agents[traderIndex]
+			order := agent.GetOrder(t)
+
+			log.WithFields(log.Fields{
+				"TID": order.TraderID,
+				"TYPE": order.OrderType,
+				"PRICE": order.Price,
+			}).Info("Order received")
+
+			if order.OrderType != "NAN" {
+				err := ex.orderBook.AddOrder(order)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"error": err,
+					}).Warn("Order Could not be added!")
+				}
+			}
+
+		}
+	}
 }
