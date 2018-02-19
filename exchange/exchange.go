@@ -7,7 +7,6 @@ import (
 	"mexs/bots"
 	"mexs/common"
 	"time"
-	"math"
 )
 
 // AuctionParameters are the ones to be evolved by the GA
@@ -140,13 +139,20 @@ func (ex *Exchange) StartExperiment() {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	for d := 0; d < ex.Info.TradingDays; d++ {
-		log.Info("Trading day %d", d)
+		// NOTE: clear orderbook at start of each day
+		ex.orderBook = OrderBook{}
+		ex.orderBook.Init()
+		log.Info("Trading day:", d)
 		for t := 0; t < ex.Info.MarketEnd; t++ {
-			log.Info("Time-step: %d", t)
-
+			log.Info("Time-step:", t)
+			log.WithFields(log.Fields{
+				"BestAsk": ex.orderBook.askBook.BestPrice,
+				"BestBid": ex.orderBook.bidBook.BestPrice,
+			}).Debug("Best at time-step:", t)
 			traderIndex := rand.Intn(ex.AgentNum)
 			var agent bots.RobotTrader = ex.agents[traderIndex]
 			order := agent.GetOrder(t)
+			// TODO: after getting order it is still needed to validated that it follow all rules
 			log.WithFields(log.Fields{
 				"TID":   order.TraderID,
 				"Type":  order.OrderType,
@@ -164,6 +170,16 @@ func (ex *Exchange) StartExperiment() {
 			}
 			ex.MakeTrades(t)
 			ex.UpdateAgents(t)
+
 		}
+		// TODO: store order books in database at the end of each day
 	}
+
+	// TODO: Persistent save of data
+
+	log.WithFields(log.Fields{
+		"Trades": len(ex.orderBook.tradeRecord),
+		"Bids": len(ex.orderBook.bidBook.Orders),
+		"Asks": len(ex.orderBook.askBook.Orders),
+	}).Info("Experiment ended")
 }

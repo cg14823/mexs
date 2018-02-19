@@ -64,12 +64,12 @@ func (o ByTimeStep) Less(i, j int) bool {
 }
 
 func (o *Order) IsValid() bool {
-	if o.TraderID > 0 &&
+	if o.TraderID >= 0 &&
 		(o.OrderType == "BID" || o.OrderType == "ASK") &&
-		o.Price > 0 && o.TimeStep > 0 && o.Time.After(time.Now()) &&
+		o.Price > 0 && o.TimeStep >= 0 &&
 		o.Quantity > 0 {
 		return true
-	} else if o.TraderID > 0 && o.OrderType == "NAN" {
+	} else if o.TraderID >= 0 && o.OrderType == "NAN" {
 		return true
 	}
 

@@ -5,6 +5,7 @@ import (
 	"mexs/common"
 	"sort"
 	log "github.com/sirupsen/logrus"
+	"fmt"
 )
 
 //NOTE: !!! IMPORTANT ORDERBOOK ASSUMES ONE ORDER PER TRADER AT ANY GIVEN TIME !!!
@@ -66,6 +67,9 @@ func (ob *OrderBookHalf) RemoveOrder(order *common.Order) error {
 }
 
 func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
+	ob.BestPrice = -1
+	ob.BestOrders = []*common.Order{}
+
 	if len(ob.Orders) == 0 {
 		return make([]*common.Order, 0), nil
 	}
@@ -73,7 +77,7 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 	bestOrder := make([]*common.Order, 0)
 	if ob.BookType == "ASK" {
 		// exchange max ask should be smaller than this value
-		var currentBestPrice float32 = 1e6
+		var currentBestPrice float32 = 1000000
 		// There is a chance that more than one trader puts in same order if
 		// there is no shout improvement or minimum increment
 
@@ -85,6 +89,11 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 				bestOrder = append(bestOrder, v)
 			}
 		}
+
+		log.WithFields(log.Fields{
+			"CurrentBestPrice": currentBestPrice,
+			"BestOrders": bestOrder,
+		}).Debug("Ask best price was found")
 	} else if ob.BookType == "BID" {
 		// all bids should be for a positive amount of money
 		var currentBestPrice float32 = -1
@@ -96,6 +105,11 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 				bestOrder = append(bestOrder, v)
 			}
 		}
+
+		log.WithFields(log.Fields{
+			"CurrentBestPrice": currentBestPrice,
+			"BestOrders": bestOrder,
+		}).Debug("Bid best price was found")
 	}
 
 	if len(bestOrder) == 0 {
@@ -109,13 +123,19 @@ func (ob *OrderBookHalf) SetBestData() error {
 	orders, err := ob.GetBestOrder()
 
 	if err != nil {
+		log.WithFields(log.Fields{
+			"OrderBookType": ob.BookType,
+		}).Error("Error ocurred:", err)
 		return err
 	}
 
 	if len(orders) == 0 {
-		ob.BestPrice = -1
 		return nil
 	}
+
+	log.WithFields(log.Fields{
+		"Fn": "SetBestData()",
+	}).Debug("Orders:", orders)
 
 	ob.BestPrice = orders[0].Price
 	sort.Sort(sort.Reverse(common.ByTimeStep(orders)))
@@ -140,7 +160,7 @@ func (ob *OrderBook) Init() {
 func (ob *OrderBook) AddOrder(order *common.Order) error {
 
 	if !order.IsValid() {
-		return errors.New("order could not be added as it is not valid")
+		return errors.New(fmt.Sprintf("order could not be added as it is not valid: %#v", order))
 	}
 
 	if order.OrderType == "NAN" {
@@ -203,7 +223,11 @@ func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, er
 		return false, &common.Order{}, &common.Order{}, bidError
 	}
 
-	if ob.bidBook.BestPrice < 0 && ob.askBook.BestPrice < 0 {
+	if ob.bidBook.BestPrice < 0 || ob.askBook.BestPrice < 0 {
+		return false, &common.Order{}, &common.Order{}, nil
+	}
+
+	if len(ob.bidBook.BestOrders) == 0 || len(ob.askBook.BestOrders) == 0  {
 		return false, &common.Order{}, &common.Order{}, nil
 	}
 
