@@ -7,6 +7,7 @@ import (
 	"mexs/bots"
 	"mexs/common"
 	"time"
+	"math"
 )
 
 // AuctionParameters are the ones to be evolved by the GA
@@ -46,7 +47,7 @@ func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo) {
 	ex.Info = Info
 	ex.orderBook = OrderBook{}
 	ex.orderBook.Init()
-	ex.agents = make(map[int]bots.RobotTrader)
+	ex.agents = map[int]bots.RobotTrader{}
 	ex.AgentNum = 0
 }
 
@@ -55,17 +56,79 @@ func (ex *Exchange) SetTraders(traders map[int]bots.RobotTrader) {
 	ex.AgentNum = len(traders)
 }
 
-func (ex *Exchange) PriceMatch (bid, ask *common.Order) *common.Trade{
-	// TODO: Finish this function
-	return &common.Trade{}
+func (ex *Exchange) PriceMatch(bid, ask *common.Order) *common.Trade {
+	price := ex.GAVector.KPricing*bid.Price +
+		(1-ex.GAVector.KPricing)*ask.Price
+
+	return &common.Trade{
+		TradeID: ex.orderBook.GetNextTradeID(),
+		Price: price,
+		BuyOrder: bid,
+		SellOrder: ask,
+	}
 }
 
-func (ex *Exchange) MakeTrades() {
-	// TODO: FINISH this function
+func (ex *Exchange) MakeTrades(timeStep int) {
+	// NOTE: This function is designed for the time step, single unit approach
+	// for a multi unit asynchronous system this function should be called
+	// every time an order is received and block until end
+	// arriving orders should be put in a queued and processed in turn
+	// The trade matching function should also be extended to deal with
+	// multiple units
+	ok, bid, ask, _ := ex.orderBook.FindPossibleTrade()
+	if !ok {
+		log.WithFields(log.Fields{
+			"Time step": timeStep,
+		}).Debug("No trade could be made")
+		return
+	}
+
+	trade := ex.PriceMatch(bid, ask)
+	trade.TimeStep = timeStep
+	// NOTE: Should always be 1 for now it may be changed
+	trade.Quantity = 1
+	trade.Time = time.Now()
+	// NOTE: This code is smelly, it assumes agents accept trade and can not refuse
+	// once the order is posted for any reason
+	err := ex.orderBook.RecordTrade(trade)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Time step": timeStep,
+		}).Error("Trade could not be made Error:", err)
+		return
+	}
+
+	ex.agents[bid.TraderID].TradeMade(trade)
+	ex.agents[ask.TraderID].TradeMade(trade)
+	log.WithFields(log.Fields{
+		"Time step": timeStep,
+		"BuyerID": bid.TraderID,
+		"SellerID": ask.TraderID,
+		"Price": trade.Price,
+	}).Info("Trade made!")
+}
+
+func (ex *Exchange) UpdateAgents(timeStep int) {
+	ex.orderBook.askBook.SetBestData()
+	ex.orderBook.bidBook.SetBestData()
+	bestAsk := ex.orderBook.askBook.BestPrice
+	bestBid := ex.orderBook.bidBook.BestPrice
+
+	marketUpdate := common.MarketUpdate{
+		TimeStep: timeStep,
+		BestAsk: bestAsk,
+		BestBid: bestBid,
+		Bids: ex.orderBook.bidBook.OrdersToList(),
+		Asks: ex.orderBook.askBook.OrdersToList(),
+		Trades: ex.orderBook.tradeRecord,
+	}
+
+	for _, agent := range ex.agents {
+		agent.MarketUpdate(marketUpdate)
+	}
 }
 
 func (ex *Exchange) StartExperiment() {
-
 	experimentID := uuid.New()
 
 	log.WithFields(log.Fields{
@@ -84,22 +147,23 @@ func (ex *Exchange) StartExperiment() {
 			traderIndex := rand.Intn(ex.AgentNum)
 			var agent bots.RobotTrader = ex.agents[traderIndex]
 			order := agent.GetOrder(t)
-
 			log.WithFields(log.Fields{
-				"TID": order.TraderID,
-				"TYPE": order.OrderType,
-				"PRICE": order.Price,
+				"TID":   order.TraderID,
+				"Type":  order.OrderType,
+				"Price": order.Price,
 			}).Info("Order received")
-
-			if order.OrderType != "NAN" {
-				err := ex.orderBook.AddOrder(order)
-				if err != nil {
-					log.WithFields(log.Fields{
-						"error": err,
-					}).Warn("Order Could not be added!")
-				}
+			if order.OrderType == "NAN" {
+				continue
 			}
 
+			err := ex.orderBook.AddOrder(order)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"error": err,
+				}).Warn("Order Could not be added!")
+			}
+			ex.MakeTrades(t)
+			ex.UpdateAgents(t)
 		}
 	}
 }

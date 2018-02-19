@@ -4,9 +4,10 @@ import (
 	"errors"
 	"mexs/common"
 	"sort"
+	log "github.com/sirupsen/logrus"
 )
 
-//TODO: !!! IMPORTANT ORDERBOOK ASSUMES ONE ORDER PER TRADER AT ANY GIVEN TIME !!!
+//NOTE: !!! IMPORTANT ORDERBOOK ASSUMES ONE ORDER PER TRADER AT ANY GIVEN TIME !!!
 
 type OrderBookHalf struct {
 	// bookType ASK or BID
@@ -15,7 +16,7 @@ type OrderBookHalf struct {
 	// per agent, this could be expanded using slices
 	Orders map[int]*common.Order
 	// Current best price negative values mean that they are uninitialized
-	BestPrice int
+	BestPrice float32
 	// traders offering best price uninitialized
 	BestOrders []*common.Order
 	// Max Depth ignored for now
@@ -28,6 +29,14 @@ func (ob *OrderBookHalf) init(bookType string, maxDepth int) {
 	ob.Orders = make(map[int]*common.Order)
 	ob.BestPrice = -1
 	ob.BestOrders = make([]*common.Order, 0)
+}
+
+func(ob *OrderBookHalf) OrdersToList() []*common.Order {
+	orders := []*common.Order{}
+	for _, k := range ob.Orders {
+		orders = append(orders, k)
+	}
+	return orders
 }
 
 func (ob *OrderBookHalf) AddOrder(order *common.Order) error {
@@ -63,8 +72,8 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 
 	bestOrder := make([]*common.Order, 0)
 	if ob.BookType == "ASK" {
-		// int32 max value, exchange max ask should be smaller than this value
-		currentBestPrice := 2147483647
+		// exchange max ask should be smaller than this value
+		var currentBestPrice float32 = 1e6
 		// There is a chance that more than one trader puts in same order if
 		// there is no shout improvement or minimum increment
 
@@ -78,7 +87,7 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 		}
 	} else if ob.BookType == "BID" {
 		// all bids should be for a positive amount of money
-		currentBestPrice := -1
+		var currentBestPrice float32 = -1
 		for _, v := range ob.Orders {
 			if v.Price > currentBestPrice {
 				bestOrder = []*common.Order{v}
@@ -104,6 +113,7 @@ func (ob *OrderBookHalf) SetBestData() error {
 	}
 
 	if len(orders) == 0 {
+		ob.BestPrice = -1
 		return nil
 	}
 
@@ -160,13 +170,12 @@ func (ob *OrderBook) RemoveOrder(order *common.Order) error {
 	}
 
 	if order.OrderType == "BID" {
-		ob.bidBook.RemoveOrder(order)
-		return nil
+		return ob.bidBook.RemoveOrder(order)
 	}
 
 	if order.OrderType == "ASK" {
-		ob.askBook.RemoveOrder(order)
-		return nil
+
+		return ob.askBook.RemoveOrder(order)
 	}
 
 	return errors.New("unknown order type cannot be removed")
@@ -177,6 +186,10 @@ func (ob *OrderBook) GetLastTrade() *common.Trade {
 		return &common.Trade{TradeID: -1}
 	}
 	return ob.tradeRecord[len(ob.tradeRecord)-1]
+}
+
+func (ob *OrderBook) GetNextTradeID() int {
+	return len(ob.tradeRecord)
 }
 
 func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, err error) {
@@ -195,9 +208,30 @@ func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, er
 	}
 
 	if ob.bidBook.BestPrice >= ob.askBook.BestPrice {
-		// Possible trade can be made
+		// Possible trade can be made and is in a FIFO basis
 		return true, ob.bidBook.BestOrders[0], ob.askBook.BestOrders[0], nil
 	}
 
 	return false, &common.Order{}, &common.Order{}, nil
+}
+
+func (ob *OrderBook) RecordTrade(trade *common.Trade) error {
+	err := ob.RemoveOrder(trade.BuyOrder)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"order": trade.BuyOrder,
+		}).Error("can not remove order so trade not made")
+		return err
+	}
+
+	err = ob.RemoveOrder(trade.SellOrder)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"order": trade.SellOrder,
+		}).Error("can not remove order so trade not made")
+		return err
+	}
+
+	ob.tradeRecord = append(ob.tradeRecord, trade)
+	return nil
 }

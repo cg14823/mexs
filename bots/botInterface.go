@@ -26,12 +26,12 @@ type RobotCore struct {
 	ActiveOrders map[int]*common.Order
 	// Balance is money made by the agent
 	// Balance = LimitPrice - transaction price
-	Balance int
+	Balance float32
 }
 
 // TraderOrders encapsulate what the traders are supposed to do
 type TraderOrder struct {
-	LimitPrice int
+	LimitPrice float32
 	// Quantity for now will be set to 1 it can be change
 	// for more complicated simulations
 	Quantity int
@@ -40,7 +40,7 @@ type TraderOrder struct {
 }
 
 func (to *TraderOrder) IsValid() bool {
-	return to.LimitPrice > 0 && to.Quantity > 0 &&
+	return to.LimitPrice > float32(0) && to.Quantity > 0 &&
 		(to.Type == "BID" || to.Type == "ASK")
 }
 
@@ -60,6 +60,6 @@ type RobotTrader interface {
 	// Remove first Order
 	RemoveOrder() error
 	TradeMade(trade *common.Trade) bool
-	MarketUpdate(update *common.MarketUpdate)
+	MarketUpdate(update common.MarketUpdate)
 	GetOrder(timeStep int) *common.Order
 }

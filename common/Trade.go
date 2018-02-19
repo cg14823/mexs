@@ -2,24 +2,24 @@ package common
 
 import (
 	"time"
-	"fmt"
 )
 
 // This is other parameters from the market
 // It should be change to use time.Time for async version
 type MarketInfo struct {
-	MaxPrice int
-	MinPrice int
+	MaxPrice float32
+	MinPrice float32
 	// MarketEnd defines the time step at which the market ends
 	MarketEnd int
 	// Number of trading days
 	TradingDays int
 }
 
+//TODO: CHECK IF this is all that is needed
 type MarketUpdate struct {
 	TimeStep int
-	BestAsk  int
-	BestBid  int
+	BestAsk  float32
+	BestBid  float32
 	Bids     []*Order
 	Asks     []*Order
 	Trades   []*Trade
@@ -29,12 +29,11 @@ type Order struct {
 	TraderID int
 	// Order types: [Bid, ask, NAN]
 	OrderType string
-	Price     int
+	Price     float32
 	Quantity  int
 	TimeStep  int
 	Time      time.Time
 }
-
 
 // For sorting lists of orders
 type ByPrice []*Order
@@ -79,9 +78,9 @@ func (o *Order) IsValid() bool {
 
 type Trade struct {
 	TradeID   int
-	BuyOrder  Order
-	SellOrder Order
-	Price     int
+	BuyOrder  *Order
+	SellOrder *Order
+	Price     float32
 	Quantity  int
 	TimeStep  int
 	Time      time.Time
