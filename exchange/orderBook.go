@@ -1,11 +1,15 @@
 package exchange
 
 import (
+	"encoding/csv"
 	"errors"
-	"mexs/common"
-	"sort"
-	log "github.com/sirupsen/logrus"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"mexs/common"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
 )
 
 //NOTE: !!! IMPORTANT ORDERBOOK ASSUMES ONE ORDER PER TRADER AT ANY GIVEN TIME !!!
@@ -32,7 +36,7 @@ func (ob *OrderBookHalf) init(bookType string, maxDepth int) {
 	ob.BestOrders = make([]*common.Order, 0)
 }
 
-func(ob *OrderBookHalf) OrdersToList() []*common.Order {
+func (ob *OrderBookHalf) OrdersToList() []*common.Order {
 	orders := []*common.Order{}
 	for _, k := range ob.Orders {
 		orders = append(orders, k)
@@ -90,10 +94,6 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 			}
 		}
 
-		log.WithFields(log.Fields{
-			"CurrentBestPrice": currentBestPrice,
-			"BestOrders": bestOrder,
-		}).Debug("Ask best price was found")
 	} else if ob.BookType == "BID" {
 		// all bids should be for a positive amount of money
 		var currentBestPrice float32 = -1
@@ -106,10 +106,6 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 			}
 		}
 
-		log.WithFields(log.Fields{
-			"CurrentBestPrice": currentBestPrice,
-			"BestOrders": bestOrder,
-		}).Debug("Bid best price was found")
 	}
 
 	if len(bestOrder) == 0 {
@@ -133,10 +129,6 @@ func (ob *OrderBookHalf) SetBestData() error {
 		return nil
 	}
 
-	log.WithFields(log.Fields{
-		"Fn": "SetBestData()",
-	}).Debug("Orders:", orders)
-
 	ob.BestPrice = orders[0].Price
 	sort.Sort(sort.Reverse(common.ByTimeStep(orders)))
 	ob.BestOrders = orders
@@ -147,6 +139,15 @@ type OrderBook struct {
 	askBook     OrderBookHalf
 	bidBook     OrderBookHalf
 	tradeRecord []*common.Trade
+	lastTrade   *common.Trade
+}
+
+func (ob *OrderBook) Reset() {
+	ob.askBook = OrderBookHalf{}
+	ob.askBook.init("ASK", 100)
+	ob.bidBook = OrderBookHalf{}
+	ob.bidBook.init("BID", 100)
+	ob.tradeRecord = make([]*common.Trade, 0)
 }
 
 func (ob *OrderBook) Init() {
@@ -155,6 +156,9 @@ func (ob *OrderBook) Init() {
 	ob.bidBook = OrderBookHalf{}
 	ob.bidBook.init("BID", 100)
 	ob.tradeRecord = make([]*common.Trade, 0)
+	ob.lastTrade = &common.Trade{
+		TradeID: -1,
+	}
 }
 
 func (ob *OrderBook) AddOrder(order *common.Order) error {
@@ -227,7 +231,7 @@ func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, er
 		return false, &common.Order{}, &common.Order{}, nil
 	}
 
-	if len(ob.bidBook.BestOrders) == 0 || len(ob.askBook.BestOrders) == 0  {
+	if len(ob.bidBook.BestOrders) == 0 || len(ob.askBook.BestOrders) == 0 {
 		return false, &common.Order{}, &common.Order{}, nil
 	}
 
@@ -257,5 +261,48 @@ func (ob *OrderBook) RecordTrade(trade *common.Trade) error {
 	}
 
 	ob.tradeRecord = append(ob.tradeRecord, trade)
+	ob.lastTrade = trade
 	return nil
+}
+
+func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
+	// NOTE: CSV file format is as follows TradeID,TradingDay,TimeStep,Price,SellerID,BuyerID,SellerPrice,BuyerPrice
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/TRADES_ID-%s_%d-%d.csv", experimentID, tradingDay, maxTD))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  tradingDay,
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+	file, err := os.Create(fileName)
+	defer file.Close()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  tradingDay,
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("Trade CSV file could not be made")
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	writer.Write([]string{"ID", "TradingDay", "TimeStep", "Price", "SellerID", "BuyerID", "AskPrice", "BidPrice"})
+	for _, trade := range ob.tradeRecord {
+		row := []string{
+			strconv.Itoa(trade.TradeID),
+			strconv.Itoa(tradingDay),
+			strconv.Itoa(trade.TimeStep),
+			fmt.Sprintf("%.3f", trade.Price),
+			strconv.Itoa(trade.SellOrder.TraderID),
+			strconv.Itoa(trade.BuyOrder.TraderID),
+			fmt.Sprintf("%.3f", trade.SellOrder.Price),
+			fmt.Sprintf("%.3f", trade.BuyOrder.Price),
+		}
+		writer.Write(row)
+	}
+
+	log.Debug("Trades saved to file:", fileName)
 }

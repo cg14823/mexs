@@ -1,16 +1,16 @@
 package bots
 
 import (
+	"crypto/rand"
 	"errors"
-	"math/rand"
+	log "github.com/sirupsen/logrus"
+	"math/big"
 	"mexs/common"
 	"time"
-	log "github.com/sirupsen/logrus"
 )
 
 type ZICTrader struct {
 	Info RobotCore
-	r1 *rand.Rand
 }
 
 func (t *ZICTrader) InitRobotCore(id int, algo string, sellerOrBuyer string, marketInfo common.MarketInfo) {
@@ -23,8 +23,6 @@ func (t *ZICTrader) InitRobotCore(id int, algo string, sellerOrBuyer string, mar
 		ActiveOrders:    map[int]*common.Order{},
 		Balance:         0,
 	}
-	s1 := rand.NewSource(time.Now().UnixNano())
-	t.r1 = rand.New(s1)
 	return
 }
 
@@ -33,7 +31,7 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 	if len(t.Info.ExecutionOrders) == 0 {
 		return &common.Order{
 			TraderID:  t.Info.TraderID,
-			OrderType: "NAN",
+			OrderType: "NA",
 		}
 	}
 
@@ -44,7 +42,8 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 			//TODO: LOG ERROR HERE
 			log.WithFields(log.Fields{
 				"ExecOrder": order,
-			}).Error()
+				"Place":     "ZIC Trader GetOrder",
+			}).Error("Error:", err)
 		}
 
 		return &common.Order{
@@ -54,16 +53,16 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 	}
 
 	if order.IsBid() {
-		bidPrice := order.LimitPrice-t.Info.MarketInfo.MinPrice
-		if bidPrice != 0 {
-			bidPrice = float32(t.r1.Intn(int(bidPrice))) +
-				t.Info.MarketInfo.MinPrice
+		bidPrice := order.LimitPrice - t.Info.MarketInfo.MinPrice
+		if bidPrice > 0 {
+			randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
+			bidPrice = float32(randPrice.Int64()) + t.Info.MarketInfo.MinPrice
 		}
 
 		marketOrder := &common.Order{
 			TraderID:  t.Info.TraderID,
 			OrderType: order.Type,
-			Price: bidPrice,
+			Price:     bidPrice,
 			// For now just bid for all the quantity in order, no partitioning
 			Quantity: order.Quantity,
 			TimeStep: timeStep,
@@ -74,16 +73,16 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 		return marketOrder
 	}
 
-
 	bidPrice := t.Info.MarketInfo.MaxPrice - order.LimitPrice
-	if bidPrice <= 0 {
-		bidPrice = float32(t.r1.Intn(int(bidPrice))) + order.LimitPrice
+	if bidPrice > 0 {
+		randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
+		bidPrice = float32(randPrice.Int64()) + order.LimitPrice
 	}
 
 	marketOrder := &common.Order{
 		TraderID:  t.Info.TraderID,
 		OrderType: order.Type,
-		Price: bidPrice,
+		Price:     bidPrice,
 		// For now just bid for all the quantity in order, no partitioning
 		Quantity: order.Quantity,
 		TimeStep: timeStep,
@@ -100,7 +99,7 @@ func (t *ZICTrader) AddOrder(order *TraderOrder) {
 	return
 }
 
-func (t *ZICTrader) SetOrder (orders []*TraderOrder){
+func (t *ZICTrader) SetOrder(orders []*TraderOrder) {
 	t.Info.ExecutionOrders = orders
 }
 

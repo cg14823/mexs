@@ -27,7 +27,7 @@ type MarketUpdate struct {
 
 type Order struct {
 	TraderID int
-	// Order types: [Bid, ask, NAN]
+	// Order types: [Bid, ask, NAN, NA]  NA stands for non active it will
 	OrderType string
 	Price     float32
 	Quantity  int
@@ -69,7 +69,7 @@ func (o *Order) IsValid() bool {
 		o.Price > 0 && o.TimeStep >= 0 &&
 		o.Quantity > 0 {
 		return true
-	} else if o.TraderID >= 0 && o.OrderType == "NAN" {
+	} else if o.TraderID >= 0 && (o.OrderType == "NAN" || o.OrderType == "NA") {
 		return true
 	}
 
