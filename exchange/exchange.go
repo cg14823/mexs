@@ -2,7 +2,6 @@ package exchange
 
 import (
 	"crypto/rand"
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"math"
 	"math/big"
@@ -155,7 +154,7 @@ func (ex *Exchange) DominanceRule(order *common.Order, t int) bool {
 	// Dominance rule is to ensure no trader can dominate by being the only one sending bids/asks
 	if order.OrderType == "BID" {
 		if lastO, ok := ex.orderBook.bidBook.Orders[order.TraderID]; ok {
-			if lastO.TimeStep + ex.GAVector.Dominance > t {
+			if lastO.TimeStep+ex.GAVector.Dominance > t {
 				log.WithFields(log.Fields{
 					"Dominance":         ex.GAVector.Dominance,
 					"Last Quote in":     lastO.TimeStep,

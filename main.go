@@ -1,14 +1,18 @@
 package main
 
 import (
+	"encoding/csv"
+	"fmt"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"mexs/bots"
 	"mexs/common"
 	"mexs/exchange"
 	"os"
+	"path/filepath"
+	"sort"
 	"time"
-	"github.com/google/uuid"
 )
 
 func init() {
@@ -78,6 +82,7 @@ func main() {
 	ex.SetTraders(traders)
 	experimentID := uuid.New()
 	ex.StartMarket(experimentID.String())
+	supplyAndDemandToCSV(sellerPrices, sellerPrices, experimentID.String(), "1")
 }
 
 // generateSteppedPrices creates limit prices
@@ -101,3 +106,55 @@ func generateSteppedPrices(min, step float32, noise, n int) []float32 {
 
 	return prices
 }
+
+func supplyAndDemandToCSV(sellers, buyers []float32, experimentID string, number string) {
+	sort.Sort(float32arr(sellers))
+	sort.Sort(sort.Reverse(float32arr(buyers)))
+
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/LIMITPRICES_ID-%s_%s.csv", experimentID, number))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+
+	file, err := os.Create(fileName)
+	defer file.Close()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("Limit prices CSV file could not be made")
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	// Type 1 is ask, type 2 is bid
+	writer.Write([]string{"NUMBER", "TYPE", "LIMIT_PRICE"})
+	for _, v := range sellers {
+		writer.Write([]string{
+			number,
+			"ASK",
+			fmt.Sprintf("%.3f", v),
+		})
+	}
+
+	for _, v := range buyers {
+		writer.Write([]string{
+			number,
+			"BID",
+			fmt.Sprintf("%.3f", v),
+		})
+	}
+
+	log.Debug("Trades saved to file:", fileName)
+}
+
+type float32arr []float32
+
+func (a float32arr) Len() int           { return len(a) }
+func (a float32arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a float32arr) Less(i, j int) bool { return a[i] < a[j] }
