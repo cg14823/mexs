@@ -21,7 +21,7 @@ func init() {
 	log.SetOutput(os.Stdout)
 
 	// Only log the warning severity or above.
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 }
 
 // TODO: create a cli interfaces to setup experiment with out having to go
@@ -47,37 +47,40 @@ func main() {
 		MaxPrice:     30.0,
 		MinPrice:     1.0,
 		MinIncrement: GAp.MinIncrement,
-		MarketEnd:    300,
+		MarketEnd:    50,
 		TradingDays:  1,
 	}
 
+	sellersN := 20
+	buyersN := 20
 	// NOTE: Use the same for now
-	sellerPrices := generateSteppedPrices(5.0, 1.0, 0, 15)
-	buyerPrices := generateSteppedPrices(3.0, 1.0, 0, 15)
+	sellerPrices := generateSteppedPrices(5.0, 1.0, 0, sellersN)
+	buyerPrices := generateSteppedPrices(5.0, 1.0, 0, buyersN)
 
-	log.Warn("SellerPrices:", sellerPrices)
+	log.Debug("SellerPrices:", sellerPrices)
+	log.Debug("BuyerPrices:", buyerPrices)
 
 	traders := make(map[int]bots.RobotTrader)
-	for i := 0; i < 15; i++ {
-		zic := &bots.ZICTrader{}
-		zic.InitRobotCore(i, "BUYER", marketInfo)
-		zic.AddOrder(&bots.TraderOrder{
+	for i := 0; i < buyersN; i++ {
+		zip := &bots.ZIPTrader{}
+		zip.InitRobotCore(i, "BUYER", marketInfo)
+		zip.AddOrder(&bots.TraderOrder{
 			LimitPrice: buyerPrices[i],
 			Quantity:   1,
 			Type:       "BID",
 		})
-		traders[i] = zic
+		traders[zip.Info.TraderID] = zip
 	}
 
-	for i := 0; i < 15; i++ {
-		zic := &bots.ZICTrader{}
-		zic.InitRobotCore(i+15, "sellers", marketInfo)
-		zic.AddOrder(&bots.TraderOrder{
+	for i := 0; i < sellersN; i++ {
+		zip := &bots.ZIPTrader{}
+		zip.InitRobotCore(i+buyersN, "sellers", marketInfo)
+		zip.AddOrder(&bots.TraderOrder{
 			LimitPrice: sellerPrices[i],
 			Quantity:   1,
 			Type:       "ASK",
 		})
-		traders[i+15] = zic
+		traders[zip.Info.TraderID] = zip
 	}
 
 	ex := exchange.Exchange{}

@@ -282,7 +282,7 @@ func (ex *Exchange) StartMarket(experimentID string) {
 			} else {
 				log.WithFields(log.Fields{
 					"Time step": t,
-				}).Debug("No order was received this time step")
+				}).Info("No order was received this time step")
 			}
 
 			ex.MakeTrades(t)

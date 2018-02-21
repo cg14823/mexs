@@ -21,7 +21,7 @@ def plot_supply_demmand(filename):
     quantityD = np.asarray(range(0,len(demand[:,0]), 1))
     quantityS = np.asarray(range(0,len(supply[:,0]), 1))
 
-    figSD = plt.figure("Trade Prices")
+    figSD = plt.figure("Supply demand curve")
     ax = figSD.add_subplot(111)
     ax.set_xlabel("Quantity")
     ax.set_ylabel("Price")
@@ -32,7 +32,6 @@ def plot_supply_demmand(filename):
     ax.step(quantityS, supply[:,0], 'g')
     
 
-plot_trades("TRADES_ID-43015129-5b78-4150-9521-5797c25289d4_0-300.csv")
-plt.show()
-plot_supply_demmand("LIMITPRICES_ID-43015129-5b78-4150-9521-5797c25289d4_1.csv")
+plot_trades("TRADES_ID-4cf6b4a4-4a89-4274-8f31-9747aca91dfb_0-50.csv")
+plot_supply_demmand("LIMITPRICES_ID-4cf6b4a4-4a89-4274-8f31-9747aca91dfb_1.csv")
 plt.show()

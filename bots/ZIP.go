@@ -55,6 +55,7 @@ func (t *ZIPTrader) InitRobotCore(id int, sellerOrBuyer string, marketInfo commo
 	t.marginSell = 0.05 + 0.3*rand.Float64()
 	t.prevBestBidPrice = -1
 	t.prevBestAskPrice = -1
+	t.job = &TraderOrder{Type: "NA"}
 }
 
 func (t *ZIPTrader) SetOrders(orders []*TraderOrder) {
@@ -108,7 +109,7 @@ func (t *ZIPTrader) GetOrder(timeStep int) *common.Order {
 		t.margin = t.marginSell
 	}
 
-	quotePrice := order.LimitPrice*1.0 + t.margin
+	quotePrice := common.Round(order.LimitPrice*1.0 + t.margin)
 	marketOrder := &common.Order{
 		TraderID:  t.Info.TraderID,
 		OrderType: order.Type,
