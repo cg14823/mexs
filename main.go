@@ -28,6 +28,7 @@ func init() {
 // through the code
 // TODO: create tools to automatically create limit prices, orders and
 // instantiate traders
+// TODO: create a tool for scheduele generation
 
 func main() {
 	// NOTE: proof of concept market experiment
@@ -43,23 +44,25 @@ func main() {
 	}
 
 	marketInfo := common.MarketInfo{
-		MaxPrice:    float32(30),
-		MinPrice:    float32(1),
-		MarketEnd:   300,
-		TradingDays: 1,
+		MaxPrice:     30.0,
+		MinPrice:     1.0,
+		MinIncrement: GAp.MinIncrement,
+		MarketEnd:    300,
+		TradingDays:  1,
 	}
 
 	// NOTE: Use the same for now
-	sellerPrices := generateSteppedPrices(float32(5), float32(1), 0, 15)
+	sellerPrices := generateSteppedPrices(5.0, 1.0, 0, 15)
+	buyerPrices := generateSteppedPrices(3.0, 1.0, 0, 15)
 
 	log.Warn("SellerPrices:", sellerPrices)
 
 	traders := make(map[int]bots.RobotTrader)
 	for i := 0; i < 15; i++ {
 		zic := &bots.ZICTrader{}
-		zic.InitRobotCore(i, "ZIC", "BUYER", marketInfo)
+		zic.InitRobotCore(i, "BUYER", marketInfo)
 		zic.AddOrder(&bots.TraderOrder{
-			LimitPrice: sellerPrices[i],
+			LimitPrice: buyerPrices[i],
 			Quantity:   1,
 			Type:       "BID",
 		})
@@ -68,7 +71,7 @@ func main() {
 
 	for i := 0; i < 15; i++ {
 		zic := &bots.ZICTrader{}
-		zic.InitRobotCore(i+15, "ZIC", "sellers", marketInfo)
+		zic.InitRobotCore(i+15, "sellers", marketInfo)
 		zic.AddOrder(&bots.TraderOrder{
 			LimitPrice: sellerPrices[i],
 			Quantity:   1,
@@ -82,34 +85,34 @@ func main() {
 	ex.SetTraders(traders)
 	experimentID := uuid.New()
 	ex.StartMarket(experimentID.String())
-	supplyAndDemandToCSV(sellerPrices, sellerPrices, experimentID.String(), "1")
+	supplyAndDemandToCSV(sellerPrices, buyerPrices, experimentID.String(), "1")
 }
 
 // generateSteppedPrices creates limit prices
 // @param min :- minimum value
 // @param noise :- rand [-noise, ..., noise] added to values
 // @param n is the number of prices to generate
-func generateSteppedPrices(min, step float32, noise, n int) []float32 {
-	prices := make([]float32, n)
+func generateSteppedPrices(min, step float64, noise, n int) []float64 {
+	prices := make([]float64, n)
 	if noise != 0 {
 
 		for i := 0; i < n; i++ {
-			prices[i] = min + float32(i)*step + float32(rand.Intn(2*noise)-noise)
+			prices[i] = min + float64(i)*step + float64(rand.Intn(2*noise)-noise)
 		}
 
 		return prices
 	}
 
 	for i := 0; i < n; i++ {
-		prices[i] = min + float32(i)*step
+		prices[i] = min + float64(i)*step
 	}
 
 	return prices
 }
 
-func supplyAndDemandToCSV(sellers, buyers []float32, experimentID string, number string) {
-	sort.Sort(float32arr(sellers))
-	sort.Sort(sort.Reverse(float32arr(buyers)))
+func supplyAndDemandToCSV(sellers, buyers []float64, experimentID string, number string) {
+	sort.Sort(float64arr(sellers))
+	sort.Sort(sort.Reverse(float64arr(buyers)))
 
 	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/LIMITPRICES_ID-%s_%s.csv", experimentID, number))
 	if err != nil {
@@ -153,8 +156,8 @@ func supplyAndDemandToCSV(sellers, buyers []float32, experimentID string, number
 	log.Debug("Trades saved to file:", fileName)
 }
 
-type float32arr []float32
+type float64arr []float64
 
-func (a float32arr) Len() int           { return len(a) }
-func (a float32arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a float32arr) Less(i, j int) bool { return a[i] < a[j] }
+func (a float64arr) Len() int           { return len(a) }
+func (a float64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a float64arr) Less(i, j int) bool { return a[i] < a[j] }

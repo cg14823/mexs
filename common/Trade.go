@@ -1,14 +1,16 @@
 package common
 
 import (
+	"math"
 	"time"
 )
 
 // This is other parameters from the market
 // It should be change to use time.Time for async version
 type MarketInfo struct {
-	MaxPrice float32
-	MinPrice float32
+	MaxPrice     float64
+	MinPrice     float64
+	MinIncrement float64
 	// MarketEnd defines the time step at which the market ends
 	MarketEnd int
 	// Number of trading days
@@ -17,19 +19,20 @@ type MarketInfo struct {
 
 //TODO: CHECK IF this is all that is needed
 type MarketUpdate struct {
-	TimeStep int
-	BestAsk  float32
-	BestBid  float32
-	Bids     []*Order
-	Asks     []*Order
-	Trades   []*Trade
+	TimeStep  int
+	BestAsk   float64
+	BestBid   float64
+	Bids      []*Order
+	Asks      []*Order
+	Trades    []*Trade
+	LastTrade *Trade
 }
 
 type Order struct {
 	TraderID int
 	// Order types: [Bid, ask, NAN, NA]  NA stands for non active it will
 	OrderType string
-	Price     float32
+	Price     float64
 	Quantity  int
 	TimeStep  int
 	Time      time.Time
@@ -80,7 +83,7 @@ type Trade struct {
 	TradeID   int
 	BuyOrder  *Order
 	SellOrder *Order
-	Price     float32
+	Price     float64
 	Quantity  int
 	TimeStep  int
 	Time      time.Time
@@ -91,4 +94,18 @@ func (t *Trade) GetBuyer() int {
 }
 func (t *Trade) GetSeller() int {
 	return t.BuyOrder.TraderID
+}
+
+// Round returns the nearest integer, rounding half away from zero.
+//
+// Special cases are:
+//	Round(±0) = ±0
+//	Round(±Inf) = ±Inf
+//	Round(NaN) = NaN
+func Round(x float64) float64 {
+	t := math.Trunc(x)
+	if math.Abs(x-t) >= 0.5 {
+		return t + math.Copysign(1, x)
+	}
+	return t
 }

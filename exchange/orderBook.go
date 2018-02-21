@@ -21,7 +21,7 @@ type OrderBookHalf struct {
 	// per agent, this could be expanded using slices
 	Orders map[int]*common.Order
 	// Current best price negative values mean that they are uninitialized
-	BestPrice float32
+	BestPrice float64
 	// traders offering best price uninitialized
 	BestOrders []*common.Order
 	// Max Depth ignored for now
@@ -81,7 +81,7 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 	bestOrder := make([]*common.Order, 0)
 	if ob.BookType == "ASK" {
 		// exchange max ask should be smaller than this value
-		var currentBestPrice float32 = 1000000
+		var currentBestPrice float64 = 1000000
 		// There is a chance that more than one trader puts in same order if
 		// there is no shout improvement or minimum increment
 
@@ -96,7 +96,7 @@ func (ob *OrderBookHalf) GetBestOrder() ([]*common.Order, error) {
 
 	} else if ob.BookType == "BID" {
 		// all bids should be for a positive amount of money
-		var currentBestPrice float32 = -1
+		var currentBestPrice float64 = -1
 		for _, v := range ob.Orders {
 			if v.Price > currentBestPrice {
 				bestOrder = []*common.Order{v}
@@ -157,7 +157,8 @@ func (ob *OrderBook) Init() {
 	ob.bidBook.init("BID", 100)
 	ob.tradeRecord = make([]*common.Trade, 0)
 	ob.lastTrade = &common.Trade{
-		TradeID: -1,
+		TradeID:  -1,
+		TimeStep: -10,
 	}
 }
 

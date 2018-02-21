@@ -13,17 +13,16 @@ type ZICTrader struct {
 	Info RobotCore
 }
 
-func (t *ZICTrader) InitRobotCore(id int, algo string, sellerOrBuyer string, marketInfo common.MarketInfo) {
+func (t *ZICTrader) InitRobotCore(id int, sellerOrBuyer string, marketInfo common.MarketInfo) {
 	t.Info = RobotCore{
 		TraderID:        id,
-		Type:            algo,
+		Type:            "ZIC",
 		SellerOrBuyer:   sellerOrBuyer,
 		ExecutionOrders: []*TraderOrder{},
 		MarketInfo:      marketInfo,
 		ActiveOrders:    map[int]*common.Order{},
 		Balance:         0,
 	}
-	return
 }
 
 func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
@@ -39,7 +38,6 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 	if !order.IsValid() {
 		err := t.RemoveOrder()
 		if err != nil {
-			//TODO: LOG ERROR HERE
 			log.WithFields(log.Fields{
 				"ExecOrder": order,
 				"Place":     "ZIC Trader GetOrder",
@@ -56,7 +54,7 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 		bidPrice := order.LimitPrice - t.Info.MarketInfo.MinPrice
 		if bidPrice > 0 {
 			randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
-			bidPrice = float32(randPrice.Int64()) + t.Info.MarketInfo.MinPrice
+			bidPrice = float64(randPrice.Int64()) + t.Info.MarketInfo.MinPrice
 		}
 
 		marketOrder := &common.Order{
@@ -76,7 +74,7 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 	bidPrice := t.Info.MarketInfo.MaxPrice - order.LimitPrice
 	if bidPrice > 0 {
 		randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
-		bidPrice = float32(randPrice.Int64()) + order.LimitPrice
+		bidPrice = float64(randPrice.Int64()) + order.LimitPrice
 	}
 
 	marketOrder := &common.Order{
@@ -99,7 +97,7 @@ func (t *ZICTrader) AddOrder(order *TraderOrder) {
 	return
 }
 
-func (t *ZICTrader) SetOrder(orders []*TraderOrder) {
+func (t *ZICTrader) SetOrders(orders []*TraderOrder) {
 	t.Info.ExecutionOrders = orders
 }
 
@@ -113,26 +111,26 @@ func (t *ZICTrader) RemoveOrder() error {
 }
 
 func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
-	// NOTE: If the trader can have multiple Bids or offers
+	// If the trader can have multiple Bids or offers
 	// ... check that trade is still active using
 	// ... the Active orders IGNORE FOR NOW
 
-	// FIXME: For system with multiple order queing and that allows
+	// For system with multiple order queueing and that allows
 	// canceling this should be part of a second function such as confirm trade
 	// ignore for now as it is async and without order queueing for the time being
 	t.Info.TradeRecord = append(t.Info.TradeRecord, trade)
-	// NOTE: For now assume that the is only one order thus trade ...
+	// For now assume that the is only one order thus trade ...
 	//  ... must match first order in order array..
 	// ... this could cause problems in async so should be changed in
 	// ... the future
 
-	// NOTE: This code also assumes quantity matches, if it does not it
+	// This code also assumes quantity matches, if it does not it
 	// ... should update execute order for correct quantity and limit price
 
 	t.Info.Balance += t.Info.ExecutionOrders[0].LimitPrice - trade.Price
 	t.RemoveOrder()
 
-	// NOTE: In case trade is no longer possible this should return false
+	// In case trade is no longer possible this should return false
 	// May be necessary for async markets
 	return true
 }

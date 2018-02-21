@@ -13,14 +13,14 @@ import (
 // AuctionParameters are the ones to be evolved by the GA
 type AuctionParameters struct {
 	// BidAskRatio is the proportion buyers to sellers
-	BidAskRatio float32
+	BidAskRatio float64
 	// k coefficient in k pricing rule pF = k *pB + (1-k)pA
-	KPricing float32
+	KPricing float64
 	// The minimum increment in the next bid
 	// If it is 0 it means there is no shout/spread improvement
-	MinIncrement float32
+	MinIncrement float64
 	// MaxShift is the maximum percentage a trader can move the current price
-	MaxShift float32
+	MaxShift float64
 	// Dominance defines how many traders have to trade before the
 	// same trader is allowed to put in a bid/ask again 0 means no dominance
 	Dominance int
@@ -187,7 +187,7 @@ func (ex *Exchange) MaxShift(order *common.Order) bool {
 	}
 
 	if ex.orderBook.lastTrade.Price*ex.GAVector.MaxShift >
-		float32(math.Abs(float64(ex.orderBook.lastTrade.Price-order.Price))) {
+		math.Abs(ex.orderBook.lastTrade.Price-order.Price) {
 		return true
 	}
 
@@ -234,12 +234,13 @@ func (ex *Exchange) UpdateAgents(timeStep int) {
 	bestBid := ex.orderBook.bidBook.BestPrice
 
 	marketUpdate := common.MarketUpdate{
-		TimeStep: timeStep,
-		BestAsk:  bestAsk,
-		BestBid:  bestBid,
-		Bids:     ex.orderBook.bidBook.OrdersToList(),
-		Asks:     ex.orderBook.askBook.OrdersToList(),
-		Trades:   ex.orderBook.tradeRecord,
+		TimeStep:  timeStep,
+		BestAsk:   bestAsk,
+		BestBid:   bestBid,
+		Bids:      ex.orderBook.bidBook.OrdersToList(),
+		Asks:      ex.orderBook.askBook.OrdersToList(),
+		Trades:    ex.orderBook.tradeRecord,
+		LastTrade: ex.orderBook.lastTrade,
 	}
 
 	for _, agent := range ex.agents {
@@ -248,25 +249,20 @@ func (ex *Exchange) UpdateAgents(timeStep int) {
 }
 
 func (ex *Exchange) StartMarket(experimentID string) {
-
 	log.WithFields(log.Fields{
 		"Trading days":        ex.Info.TradingDays,
 		"Training time steps": ex.Info.MarketEnd,
 		"Num. Traders":        len(ex.agents),
 		"ID":                  experimentID,
 	}).Info("Market experiment started")
-	// TODO: refactor this section so it is cleaner
+
 	for d := 0; d < ex.Info.TradingDays; d++ {
 		// NOTE: clear orderbook at start of each day
 		ex.orderBook.Reset()
 		log.Info("Trading day:", d)
 		for t := 0; t < ex.Info.MarketEnd; t++ {
 			log.Info("Time-step:", t)
-			//log.WithFields(log.Fields{
-			//	"BestAsk": ex.orderBook.askBook.BestPrice,
-			//	"BestBid": ex.orderBook.bidBook.BestPrice,
-			//}).Debug("Best at time-step:", t)
-
+			// TODO: DISPATCH MARKET ORDER BASED ON SECHEDULE
 			ok, order := ex.GetTraderOrder(t)
 			if ok {
 				err := ex.orderBook.AddOrder(order)
