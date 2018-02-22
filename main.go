@@ -28,7 +28,7 @@ func init() {
 // through the code
 // TODO: create tools to automatically create limit prices, orders and
 // instantiate traders
-// TODO: create a tool for scheduele generation
+// TODO: create a tool for schedule generation
 
 func main() {
 	// NOTE: proof of concept market experiment
@@ -44,18 +44,18 @@ func main() {
 	}
 
 	marketInfo := common.MarketInfo{
-		MaxPrice:     30.0,
+		MaxPrice:     100.0,
 		MinPrice:     1.0,
 		MinIncrement: GAp.MinIncrement,
-		MarketEnd:    50,
+		MarketEnd:    100,
 		TradingDays:  1,
 	}
 
-	sellersN := 20
-	buyersN := 20
+	sellersN := 30
+	buyersN := 30
 	// NOTE: Use the same for now
 	sellerPrices := generateSteppedPrices(5.0, 1.0, 0, sellersN)
-	buyerPrices := generateSteppedPrices(5.0, 1.0, 0, buyersN)
+	buyerPrices := generateSteppedPrices(2.0, 2.0, 0, buyersN)
 
 	log.Debug("SellerPrices:", sellerPrices)
 	log.Debug("BuyerPrices:", buyerPrices)
