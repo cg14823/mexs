@@ -140,5 +140,9 @@ func (t *ZICTrader) MarketUpdate(info common.MarketUpdate) {
 	return
 }
 
+func (t *ZICTrader) GetExecutionOrder() []*TraderOrder {
+	return t.Info.ExecutionOrders
+}
+
 // Check robot interface correctly implemented
 var _ RobotTrader = (*ZICTrader)(nil)

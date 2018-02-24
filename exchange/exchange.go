@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"mexs/bots"
 	"mexs/common"
+	"os"
 	"time"
 )
 
@@ -29,31 +30,61 @@ type AuctionParameters struct {
 	OrderQueuing int
 }
 
+// Used to define when
+type AllocationSchedule struct {
+	// The first key maps to a trading day
+	// key -1 means all trading days
+	// second key maps to trading step
+
+	Schedule map[int]map[int][]TID2RTO
+}
+
+// Help structure to pair orders to Traders
+type TID2RTO struct {
+	TraderID  int
+	ExecOrder []*bots.TraderOrder
+}
+
 /* Exchange defines the basic interfaces all exchanges have to follow
 * <h3>Functions</>
 *   - StartUp
 *   -
  */
 type Exchange struct {
-	GAVector  AuctionParameters
-	Info      common.MarketInfo
-	orderBook OrderBook
-	agents    map[int]bots.RobotTrader
-	AgentNum  int
+	GAVector   AuctionParameters
+	Info       common.MarketInfo
+	orderBook  OrderBook
+	agents     map[int]bots.RobotTrader
+	AgentNum   int
+	SellersIDs []int
+	BuyersIDs  []int
+	bids       int
+	asks       int
+	trades     int
 }
 
-func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo) {
+func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo, sellers, buyers []int) {
 	ex.GAVector = GAVector
 	ex.Info = Info
 	ex.orderBook = OrderBook{}
 	ex.orderBook.Init()
 	ex.agents = map[int]bots.RobotTrader{}
 	ex.AgentNum = 0
+	ex.SellersIDs = sellers
+	ex.BuyersIDs = buyers
+	ex.bids = 0
+	ex.asks = 0
+	ex.trades = 0
 }
 
 func (ex *Exchange) SetTraders(traders map[int]bots.RobotTrader) {
 	ex.agents = traders
 	ex.AgentNum = len(traders)
+}
+
+func (ex *Exchange) ResetBidAskCount() {
+	ex.bids = 0
+	ex.asks = 0
 }
 
 func (ex *Exchange) PriceMatch(bid, ask *common.Order) *common.Trade {
@@ -92,6 +123,7 @@ func (ex *Exchange) MakeTrades(timeStep int) {
 	// NOTE: This code is smelly, it assumes agents accept trade and can not refuse
 	// once the order is posted for any reason
 	err := ex.orderBook.RecordTrade(trade)
+	ex.trades++
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Time step": timeStep,
@@ -110,21 +142,126 @@ func (ex *Exchange) MakeTrades(timeStep int) {
 }
 
 func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
-	for tries := 0; tries < 5; tries++ {
-		traderIndex, _ := rand.Int(rand.Reader, big.NewInt(int64(ex.AgentNum)))
-		var agent bots.RobotTrader = ex.agents[int(traderIndex.Int64())]
+	traderType := "NONE"
 
+	for tries := 0; tries < 10; tries++ {
+
+		traderType1, traderID := ex.EnforceBidToAskRatio(traderType, t)
+		traderType = traderType1
+		var agent bots.RobotTrader = ex.agents[traderID]
 		order := agent.GetOrder(t)
 		if order.OrderType != "BID" && order.OrderType != "ASK" {
+			log.WithFields(log.Fields{
+				"traderType":       traderType,
+				"OrderType":        order.OrderType,
+				"TraderID":         traderID,
+				"Agent has orders": len(agent.GetExecutionOrder()),
+			}).Debug("invalid order")
 			continue
 		}
 
 		validOrder := ex.OrderComplies(order, t)
 		if validOrder {
+			if order.OrderType == "BID" {
+				ex.bids++
+			} else {
+				ex.asks++
+			}
+
 			return true, order
 		}
+
+		log.WithFields(log.Fields{
+			"traderType":       traderType,
+			"OrderType":        order.OrderType,
+			"order price":      order.Price,
+			"TraderID":         traderID,
+			"Agent has orders": len(agent.GetExecutionOrder()),
+		}).Debug("Order did not comply")
 	}
 	return false, &common.Order{}
+}
+
+func (ex *Exchange) EnforceBidToAskRatio(traderType string, t int) (string, int) {
+	if traderType == "NONE" {
+		traderType2 := ex.nextBuyerOrSeller(t)
+		return traderType2, ex.getRandomTrader(traderType2)
+	}
+
+	return traderType, ex.getRandomTrader(traderType)
+}
+
+// Returns the id of the trader to be asked
+func (ex *Exchange) nextBuyerOrSeller(t int) string {
+	// First we deal with the edge cases of when the bid:ask is either 0 or INf
+	if math.IsInf(ex.GAVector.BidAskRatio, 0) {
+		// Only bids
+		if numBuyers := len(ex.BuyersIDs); numBuyers > 0 {
+			return "buyer"
+		}
+		log.WithFields(log.Fields{
+			"Bid:Ask":  ex.GAVector.BidAskRatio,
+			"#Sellers": len(ex.SellersIDs),
+			"#Buyers":  len(ex.BuyersIDs),
+			"Function": "NextBuyerOrSeller",
+		}).Error("Error Next is buyer but the are no buyers")
+		panic("No buyers")
+	}
+
+	if ex.GAVector.BidAskRatio == 0 {
+		// Only asks
+		if numSellers := len(ex.SellersIDs); numSellers > 0 {
+			return "seller"
+		}
+
+		log.WithFields(log.Fields{
+			"Bid:Ask":  ex.GAVector.BidAskRatio,
+			"#Sellers": len(ex.SellersIDs),
+			"#Buyers":  len(ex.BuyersIDs),
+			"Function": "enforceBidToAskRatio",
+		}).Error("Error selecting random seller")
+		panic("No Sellers")
+	}
+
+	currentRatio := float64(ex.bids) / float64(ex.asks)
+	log.WithFields(log.Fields{
+		"Bid:Ask":  ex.GAVector.BidAskRatio,
+		"#Sellers": len(ex.SellersIDs),
+		"#Buyers":  len(ex.BuyersIDs),
+		"Function": "enforceBidToAskRatio",
+		"Timestep": t,
+	}).Debug("current bid ask before this time step :", currentRatio)
+
+	if currentRatio > ex.GAVector.BidAskRatio {
+		// this means that we need to lower our ratio thus select aks
+		return "seller"
+	} else if currentRatio < ex.GAVector.BidAskRatio {
+		return "buyer"
+	}
+
+	// If ratio correct just pick one at random
+	if val, _ := rand.Int(rand.Reader, big.NewInt(10)); val.Int64() >= 5 {
+		return "seller"
+	}
+
+	return "buyer"
+}
+
+func (ex *Exchange) getRandomTrader(traderType string) int {
+	if traderType == "seller" {
+		val, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ex.SellersIDs))))
+		return ex.SellersIDs[int(val.Int64())]
+	} else if traderType == "buyer" {
+		val, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ex.BuyersIDs))))
+		return ex.BuyersIDs[int(val.Int64())]
+	}
+
+	log.WithFields(log.Fields{
+		"traderType": traderType,
+	}).Error("Invalid trader type")
+	// pick an Id at random
+	val, _ := rand.Int(rand.Reader, big.NewInt(int64(ex.AgentNum)))
+	return int(val.Int64())
 }
 
 func (ex *Exchange) OrderComplies(order *common.Order, t int) bool {
@@ -207,6 +344,7 @@ func (ex *Exchange) MinimumIncrementRule(order *common.Order) bool {
 					"Best price":        ex.orderBook.bidBook.BestPrice,
 					"Minimum Increment": ex.GAVector.MinIncrement,
 					"Bid":               order.Price,
+					"TID":               order.TraderID,
 				}).Debug("Bid was rejected as it does not improve enough on best bid")
 				return false
 			}
@@ -215,10 +353,11 @@ func (ex *Exchange) MinimumIncrementRule(order *common.Order) bool {
 		if ex.orderBook.askBook.BestPrice != -1 {
 			if ex.orderBook.askBook.BestPrice-ex.GAVector.MinIncrement < order.Price {
 				log.WithFields(log.Fields{
-					"Best price":        ex.orderBook.askBook.BestPrice,
+					"Best ask":          ex.orderBook.askBook.BestPrice,
 					"Minimum Increment": ex.GAVector.MinIncrement,
 					"Ask":               order.Price,
-				}).Debug("Ask was rejected as it does not improve enough on best bid")
+					"TID":               order.TraderID,
+				}).Debug("Ask was rejected as it does not improve enough on best ask")
 				return false
 			}
 		}
@@ -248,7 +387,7 @@ func (ex *Exchange) UpdateAgents(timeStep int) {
 	}
 }
 
-func (ex *Exchange) StartMarket(experimentID string) {
+func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 	log.WithFields(log.Fields{
 		"Trading days":        ex.Info.TradingDays,
 		"Training time steps": ex.Info.MarketEnd,
@@ -256,13 +395,22 @@ func (ex *Exchange) StartMarket(experimentID string) {
 		"ID":                  experimentID,
 	}).Info("Market experiment started")
 
+	err := os.MkdirAll("../mexs/logs/"+experimentID+"/", 0755)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err.Error(),
+		}).Error("Log Folder for this experiment could not be made")
+	}
+
 	for d := 0; d < ex.Info.TradingDays; d++ {
 		// NOTE: clear orderbook at start of each day
 		ex.orderBook.Reset()
+		ex.ResetBidAskCount()
 		log.Info("Trading day:", d)
 		for t := 0; t < ex.Info.MarketEnd; t++ {
 			log.Info("Time-step:", t)
-			// TODO: DISPATCH MARKET ORDER BASED ON SECHEDULE
+			ex.RenewExecOrders(t, d, s)
+
 			ok, order := ex.GetTraderOrder(t)
 			if ok {
 				err := ex.orderBook.AddOrder(order)
@@ -278,7 +426,6 @@ func (ex *Exchange) StartMarket(experimentID string) {
 						"error":     err.Error(),
 					}).Error("Order could not be added")
 				}
-
 			} else {
 				log.WithFields(log.Fields{
 					"Time step": t,
@@ -288,15 +435,43 @@ func (ex *Exchange) StartMarket(experimentID string) {
 			ex.MakeTrades(t)
 			ex.UpdateAgents(t)
 		}
+
+		log.WithFields(log.Fields{
+			"Trades": len(ex.orderBook.tradeRecord),
+			"Bids":   ex.bids,
+			"Asks":   ex.asks,
+		}).Info("Trading day ended")
 		// TODO: store order books in database at the end of each day
-		ex.orderBook.TradesToCSV(experimentID, d, ex.Info.MarketEnd)
+		ex.orderBook.TradesToCSV(experimentID, d, ex.Info.TradingDays)
+	}
+	// TODO: Persistent save of data
+	log.WithFields(log.Fields{
+		"Trades":         ex.trades,
+		"remaining Bids": len(ex.orderBook.bidBook.Orders),
+		"remaining Asks": len(ex.orderBook.askBook.Orders),
+		"EID":            experimentID,
+	}).Info("Experiment ended")
+}
+
+// It renews Execution Orders based on a schedule
+func (ex *Exchange) RenewExecOrders(t, d int, s AllocationSchedule) {
+	if _, ok := s.Schedule[d]; ok {
+		if _, ok := s.Schedule[d][t]; ok {
+			orders := s.Schedule[d][t]
+			for i := 0; i < len(orders); i++ {
+				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
+			}
+		}
 	}
 
-	// TODO: Persistent save of data
+	if _, ok := s.Schedule[-1]; ok {
+		if _, ok := s.Schedule[-1][t]; ok {
+			orders := s.Schedule[-1][t]
+			for i := 0; i < len(orders); i++ {
+				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
+			}
+		}
+	}
 
-	log.WithFields(log.Fields{
-		"Trades": len(ex.orderBook.tradeRecord),
-		"Bids":   len(ex.orderBook.bidBook.Orders),
-		"Asks":   len(ex.orderBook.askBook.Orders),
-	}).Info("Experiment ended")
+	log.Debug("Renewed agents orders")
 }

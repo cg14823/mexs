@@ -62,4 +62,5 @@ type RobotTrader interface {
 	TradeMade(trade *common.Trade) bool
 	MarketUpdate(update common.MarketUpdate)
 	GetOrder(timeStep int) *common.Order
+	GetExecutionOrder() []*TraderOrder
 }

@@ -47,15 +47,17 @@ func main() {
 		MaxPrice:     100.0,
 		MinPrice:     1.0,
 		MinIncrement: GAp.MinIncrement,
-		MarketEnd:    100,
+		MarketEnd:    10,
 		TradingDays:  1,
 	}
 
 	sellersN := 30
 	buyersN := 30
 	// NOTE: Use the same for now
-	sellerPrices := generateSteppedPrices(5.0, 1.0, 0, sellersN)
-	buyerPrices := generateSteppedPrices(2.0, 2.0, 0, buyersN)
+	sellerPrices := generateSteppedPrices(5.0, 1, 0, sellersN)
+	buyerPrices := generateSteppedPrices(5.0, 1.0, 0, buyersN)
+	sellerIDs := make([]int, sellersN)
+	buyerIDs := make([]int, buyersN)
 
 	log.Debug("SellerPrices:", sellerPrices)
 	log.Debug("BuyerPrices:", buyerPrices)
@@ -70,6 +72,7 @@ func main() {
 			Type:       "BID",
 		})
 		traders[zip.Info.TraderID] = zip
+		buyerIDs[i] = zip.Info.TraderID
 	}
 
 	for i := 0; i < sellersN; i++ {
@@ -81,13 +84,16 @@ func main() {
 			Type:       "ASK",
 		})
 		traders[zip.Info.TraderID] = zip
+		sellerIDs[i] = zip.Info.TraderID
 	}
 
+	s := generateBasicAllocationSchedule(traders)
+
 	ex := exchange.Exchange{}
-	ex.Init(GAp, marketInfo)
+	ex.Init(GAp, marketInfo, sellerIDs, buyerIDs)
 	ex.SetTraders(traders)
 	experimentID := uuid.New()
-	ex.StartMarket(experimentID.String())
+	ex.StartMarket(experimentID.String(), s)
 	supplyAndDemandToCSV(sellerPrices, buyerPrices, experimentID.String(), "1")
 }
 
@@ -113,11 +119,30 @@ func generateSteppedPrices(min, step float64, noise, n int) []float64 {
 	return prices
 }
 
+func generateBasicAllocationSchedule(traders map[int]bots.RobotTrader) exchange.AllocationSchedule {
+	// This generates an allocation schedule in which all traders get the same order each training day
+
+	s := exchange.AllocationSchedule{
+		Schedule: make(map[int]map[int][]exchange.TID2RTO),
+	}
+	s.Schedule[-1] = make(map[int][]exchange.TID2RTO)
+	s.Schedule[-1][0] = make([]exchange.TID2RTO, 0)
+
+	for k, v := range traders {
+		tido := exchange.TID2RTO{
+			TraderID:  k,
+			ExecOrder: v.GetExecutionOrder(),
+		}
+		s.Schedule[-1][0] = append(s.Schedule[-1][0], tido)
+	}
+	return s
+}
+
 func supplyAndDemandToCSV(sellers, buyers []float64, experimentID string, number string) {
 	sort.Sort(float64arr(sellers))
 	sort.Sort(sort.Reverse(float64arr(buyers)))
 
-	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/LIMITPRICES_ID-%s_%s.csv", experimentID, number))
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/LIMITPRICES_%s.csv", experimentID, number))
 	if err != nil {
 		log.WithFields(log.Fields{
 			"experimentID": experimentID,

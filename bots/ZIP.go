@@ -268,5 +268,8 @@ func (t *ZIPTrader) TradeMade(trade *common.Trade) bool {
 	t.RemoveOrder()
 	return true
 }
+func (t *ZIPTrader) GetExecutionOrder() []*TraderOrder {
+	return t.Info.ExecutionOrders
+}
 
 var _ RobotTrader = (*ZIPTrader)(nil)

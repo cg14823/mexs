@@ -268,7 +268,7 @@ func (ob *OrderBook) RecordTrade(trade *common.Trade) error {
 
 func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
 	// CSV file format is as follows TradeID,TradingDay,TimeStep,Price,SellerID,BuyerID,SellerPrice,BuyerPrice
-	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/TRADES_ID-%s_%d-%d.csv", experimentID, tradingDay, maxTD))
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/TRADES_%d_%d.csv", experimentID, tradingDay, maxTD))
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Trading Day":  tradingDay,
