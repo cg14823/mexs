@@ -1,2 +1,2 @@
 #@IgnoreInspection BashAddShebang
-rm logs/*.csv
+rm -r logs/*/

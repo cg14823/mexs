@@ -153,13 +153,13 @@ func (t *ZIPTrader) MarketUpdate(update common.MarketUpdate) {
 		askLifted = true
 	}
 
-	log.WithFields(log.Fields{
-		"TraderID":     t.Info.TraderID,
-		"Bid Improved": bidImproved,
-		"Bid Hit":      bidHit,
-		"Ask Improved": askImporved,
-		"Ask Lifted":   askLifted,
-	}).Debug("ZIP trader update")
+	//log.WithFields(log.Fields{
+	//	"TraderID":     t.Info.TraderID,
+	//	"Bid Improved": bidImproved,
+	//	"Bid Hit":      bidHit,
+	//	"Ask Improved": askImporved,
+	//	"Ask Lifted":   askLifted,
+	//}).Debug("ZIP trader update")
 
 	deal := bidHit || askLifted
 
