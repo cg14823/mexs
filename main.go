@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"io/ioutil"
 	"math/rand"
 	"mexs/bots"
 	"mexs/common"
@@ -16,6 +18,22 @@ import (
 	"strings"
 	"time"
 )
+
+type ConfigFile struct {
+	EID       string                     `json:"EID"`
+	GA        exchange.AuctionParameters `json:"GA"`
+	Ts        int                        `json:"Ts"`
+	Days      int                        `json:"Days"`
+	SellerIDs []int                      `json:"SellerIDs"`
+	BuyerIDs  []int                      `json:"BuyerIDs"`
+	// AlgoS and AlgoB is the trading algo used by sellers aad buyers respectively
+	AlgoS        []string          `json:"AlgoS"`
+	AlgoB        []string          `json:"AlgoB"`
+	Sps          []float64         `json:"Sps"`
+	Bps          []float64         `json:"Bps"`
+	ScheduleType string            `json:"ScheduleType"`
+	Info         common.MarketInfo `json:"MarketInfo"`
+}
 
 func init() {
 	// Output to stdout instead of the default stderr
@@ -89,7 +107,7 @@ func main() {
 			Value: 1,
 		},
 		cli.StringFlag{
-			Name: "log-level",
+			Name:  "log-level",
 			Usage: "Set log level [Debug, Info, Warn, Error]",
 			Value: "Info",
 		},
@@ -119,19 +137,19 @@ type ExperimentConfig struct {
 	Agents     map[int]bots.RobotTrader
 	Schedule   exchange.AllocationSchedule
 	MarketInfo common.MarketInfo
-	Sps []float64
-	Bps []float64
+	Sps        []float64
+	Bps        []float64
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
 	configFile := strings.TrimSpace(c.String("config-file"))
 	if configFile != "NIL" {
-		return getConfigFile(configFile)
-
+		return getConfigFile(configFile, c)
 	}
+
 	log.SetLevel(log.InfoLevel)
 	logLevel := strings.TrimSpace(c.String("log-level"))
-	switch logLevel{
+	switch logLevel {
 	case "Debug":
 		log.SetLevel(log.DebugLevel)
 	case "Info":
@@ -168,7 +186,7 @@ func checkFlags(c *cli.Context) ExperimentConfig {
 		traders, marketInfo)
 
 	GAp := exchange.AuctionParameters{
-		BidAskRatio:  0.5,
+		BidAskRatio:  1,
 		KPricing:     0.5,
 		MinIncrement: 1,
 		MaxShift:     2,
@@ -176,29 +194,29 @@ func checkFlags(c *cli.Context) ExperimentConfig {
 	}
 
 	eConfig := ExperimentConfig{
-		GA: GAp,
-		EID:  strings.TrimSpace(c.String("eid")),
-		Days: c.Int("days"),
-		Ts:   c.Int("ts"),
+		GA:         GAp,
+		EID:        strings.TrimSpace(c.String("eid")),
+		Days:       c.Int("days"),
+		Ts:         c.Int("ts"),
 		SellersIDs: sellersIDS,
-		BuyersIDs: buyersIDS,
-		Agents: traders,
+		BuyersIDs:  buyersIDS,
+		Agents:     traders,
 		MarketInfo: marketInfo,
-		Schedule: generateBasicAllocationSchedule(traders),
-		Sps: sps,
-		Bps: bps,
+		Schedule:   generateBasicAllocationSchedule(traders),
+		Sps:        sps,
+		Bps:        bps,
 	}
 
 	return eConfig
 }
 
 func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo string,
-	traders map[int]bots.RobotTrader, info common.MarketInfo) (map[int]bots.RobotTrader, []int){
+	traders map[int]bots.RobotTrader, info common.MarketInfo) (map[int]bots.RobotTrader, []int) {
 
 	ids := make([]int, n)
 	orderType := "ASK"
 	tType := "SELLER"
-	if  traderType == "BUYER" {
+	if traderType == "BUYER" {
 		orderType = "BID"
 		tType = "SELLER"
 	}
@@ -206,7 +224,7 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 	if traderAlgo == "ZIP" {
 		for i := 0; i < n; i++ {
 			zip := &bots.ZIPTrader{}
-			zip.InitRobotCore(i + idStart, tType, info)
+			zip.InitRobotCore(i+idStart, tType, info)
 			zip.AddOrder(&bots.TraderOrder{
 				LimitPrice: limitPrices[i],
 				Quantity:   1,
@@ -218,7 +236,7 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 	} else if traderAlgo == "ZIC" {
 		for i := 0; i < n; i++ {
 			zip := &bots.ZICTrader{}
-			zip.InitRobotCore(i + idStart, tType, info)
+			zip.InitRobotCore(i+idStart, tType, info)
 			zip.AddOrder(&bots.TraderOrder{
 				LimitPrice: limitPrices[i],
 				Quantity:   1,
@@ -234,8 +252,116 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 	return traders, ids
 }
 
-func getConfigFile(fileName string) ExperimentConfig {
-	return ExperimentConfig{}
+func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
+	jsonFile, err := os.Open(fileName)
+	if err != nil {
+		log.Panic(err.Error())
+	}
+
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	var configFile ConfigFile
+	json.Unmarshal(byteValue, &configFile)
+
+	log.SetLevel(log.InfoLevel)
+	logLevel := strings.TrimSpace(c.String("log-level"))
+	switch logLevel {
+	case "Debug":
+		log.SetLevel(log.DebugLevel)
+	case "Info":
+		log.SetLevel(log.InfoLevel)
+	case "Warn":
+		log.SetLevel(log.WarnLevel)
+	case "Error":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
+
+	if configFile.EID == "" {
+		configFile.EID = strings.TrimSpace(c.String("eid"))
+	}
+
+	traders := make(map[int]bots.RobotTrader)
+	for i, id := range configFile.SellerIDs {
+		switch configFile.AlgoS[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "SELLER", configFile.Info)
+			zipT.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Sps[i],
+				Quantity:   1,
+				Type:       "ASK",
+			})
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "SELLER", configFile.Info)
+			zic.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Sps[i],
+				Quantity:   1,
+				Type:       "ASK",
+			})
+			traders[zic.Info.TraderID] = zic
+		default:
+			// FIXME: If incorrect type default to ZIP for now
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "SELLER", configFile.Info)
+			zipT.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Sps[i],
+				Quantity:   1,
+				Type:       "ASK",
+			})
+			traders[zipT.Info.TraderID] = zipT
+		}
+	}
+
+	for i, id := range configFile.BuyerIDs {
+		switch configFile.AlgoS[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "BUYER", configFile.Info)
+			zipT.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Bps[i],
+				Quantity:   1,
+				Type:       "BID",
+			})
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "BUYER", configFile.Info)
+			zic.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Bps[i],
+				Quantity:   1,
+				Type:       "BID",
+			})
+			traders[zic.Info.TraderID] = zic
+		default:
+			// FIXME: If incorrect type default to ZIP for now
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "BUYER", configFile.Info)
+			zipT.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Bps[i],
+				Quantity:   1,
+				Type:       "BID",
+			})
+			traders[zipT.Info.TraderID] = zipT
+		}
+	}
+
+	return ExperimentConfig{
+		EID:        configFile.EID,
+		GA:         configFile.GA,
+		Ts:         configFile.Ts,
+		Days:       configFile.Days,
+		SellersIDs: configFile.SellerIDs,
+		BuyersIDs:  configFile.BuyerIDs,
+		MarketInfo: configFile.Info,
+		Agents:     traders,
+		Sps:        configFile.Sps,
+		Bps:        configFile.Bps,
+		// For now only standard schedule accepted
+		Schedule: generateBasicAllocationSchedule(traders),
+	}
 }
 
 func experiment(c *cli.Context) {
@@ -245,7 +371,7 @@ func experiment(c *cli.Context) {
 	ex.Init(eConfig.GA, eConfig.MarketInfo, eConfig.SellersIDs, eConfig.BuyersIDs)
 	ex.SetTraders(eConfig.Agents)
 	ex.StartMarket(eConfig.EID, eConfig.Schedule)
-	supplyAndDemandToCSV(eConfig.Sps,eConfig.Bps, eConfig.EID, "1")
+	supplyAndDemandToCSV(eConfig.Sps, eConfig.Bps, eConfig.EID, "1")
 }
 
 // TODO: create a cli interfaces to setup experiment with out having to go

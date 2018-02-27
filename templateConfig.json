@@ -1,6 +1,6 @@
 {
   "GA": {
-    "BidAskRatio": 0.5,
+    "BidAskRatio": 1,
     "KPricing": 0.5,
     "MinIncrement": 1.0,
     "MaxShift": 2,
@@ -12,14 +12,16 @@
   "Days": 3,
   "SellerIDs": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
   "BuyerIDs": [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59],
-  "Sps" : [],
-  "Bps": [],
-  "Schedule": "STANDARD",
+  "AlgoS": ["ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP"],
+  "AlgoB": ["ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP", "ZIP"],
+  "Sps" : [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34],
+  "Bps": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34],
+  "ScheduleType": "STANDARD",
   "MarketInfo": {
     "MaxPrice": 100.0,
     "MinPrice": 1.0,
     "MinIncrement": 1.0,
-    "MarketEnd": 100,
+    "MarketEnd": 50,
     "TradingDays": 3
   }
 

@@ -8,13 +8,13 @@ import (
 // This is other parameters from the market
 // It should be change to use time.Time for async version
 type MarketInfo struct {
-	MaxPrice     float64
-	MinPrice     float64
-	MinIncrement float64
+	MaxPrice     float64 `json:"MaxPrice"`
+	MinPrice     float64 `json:"MinPrice"`
+	MinIncrement float64 `json:"MinIncrement"`
 	// MarketEnd defines the time step at which the market ends
-	MarketEnd int
+	MarketEnd int `json:"MarketEnd"`
 	// Number of trading days
-	TradingDays int
+	TradingDays int `json:"TradingDays"`
 }
 
 //TODO: CHECK IF this is all that is needed

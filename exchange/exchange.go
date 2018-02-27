@@ -14,20 +14,20 @@ import (
 // AuctionParameters are the ones to be evolved by the GA
 type AuctionParameters struct {
 	// BidAskRatio is the proportion buyers to sellers
-	BidAskRatio float64
+	BidAskRatio float64 `json:"BidAskRatio"`
 	// k coefficient in k pricing rule pF = k *pB + (1-k)pA
-	KPricing float64
+	KPricing float64 `json:"KPricing"`
 	// The minimum increment in the next bid
 	// If it is 0 it means there is no shout/spread improvement
-	MinIncrement float64
+	MinIncrement float64 `json:"MinIncrement"`
 	// MaxShift is the maximum percentage a trader can move the current price
-	MaxShift float64
+	MaxShift float64 `json:"MaxShift"`
 	// Dominance defines how many traders have to trade before the
 	// same trader is allowed to put in a bid/ask again 0 means no dominance
-	Dominance int
+	Dominance int `json:"Dominance"`
 	// OrderQueueing is the number of orders one trader can have queued
 	// for now fixed to 1
-	OrderQueuing int
+	OrderQueuing int `json:"OrderQueuing,omitempty"`
 }
 
 // Used to define when
@@ -144,7 +144,7 @@ func (ex *Exchange) MakeTrades(timeStep int) {
 func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
 	traderType := "NONE"
 
-	for tries := 0; tries < 10; tries++ {
+	for tries := 0; tries < ex.AgentNum; tries++ {
 
 		traderType1, traderID := ex.EnforceBidToAskRatio(traderType, t)
 		traderType = traderType1
@@ -167,7 +167,7 @@ func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
 			} else {
 				ex.asks++
 			}
-
+			log.Debugf("Bids ask %d:%d", ex.bids,ex.asks)
 			return true, order
 		}
 
@@ -189,6 +189,14 @@ func (ex *Exchange) EnforceBidToAskRatio(traderType string, t int) (string, int)
 	}
 
 	return traderType, ex.getRandomTrader(traderType)
+}
+
+// switch between enforce agent and random picker
+func (ex *Exchange) RandomAgentPicker(traderType string, t int) (string, int) {
+	val, _ := rand.Int(rand.Reader, big.NewInt(int64(ex.AgentNum)))
+	id := int(val.Int64())
+	tType := "buyer"
+	return tType, id
 }
 
 // Returns the id of the trader to be asked
