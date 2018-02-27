@@ -33,6 +33,10 @@ type ConfigFile struct {
 	Bps          []float64         `json:"Bps"`
 	ScheduleType string            `json:"ScheduleType"`
 	Info         common.MarketInfo `json:"MarketInfo"`
+	Gens int `json:"Gens,omitempty"`
+	Individuals int `json:"Individuals,omitempty"`
+	FitnessFN string `json:"FitnessFn, omitempty"`
+	CInit string `json:"CInit, omitempty"`
 }
 
 func init() {
@@ -120,6 +124,12 @@ func main() {
 			Action: experiment,
 			Flags:  app.Flags,
 		},
+		cli.Command{
+			Name: "GA",
+			Usage: "Start a evolution process",
+			Action: startGA,
+			Flags: app.Flags,
+		},
 	}
 
 	app.Name = "Minimal Exchange Simulator"
@@ -139,6 +149,10 @@ type ExperimentConfig struct {
 	MarketInfo common.MarketInfo
 	Sps        []float64
 	Bps        []float64
+	Gens int `json:"Gens,omitempty"`
+	Individuals int `json:"Individuals,omitempty"`
+	FitnessFN string `json:"FitnessFN, omitempty"`
+	CInit string `json:"CInit, omitempty"`
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
@@ -361,6 +375,10 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		Bps:        configFile.Bps,
 		// For now only standard schedule accepted
 		Schedule: generateBasicAllocationSchedule(traders),
+		Gens: configFile.Gens,
+		Individuals:configFile.Individuals,
+		FitnessFN: configFile.FitnessFN,
+		CInit: configFile.CInit,
 	}
 }
 
@@ -539,3 +557,19 @@ type float64arr []float64
 func (a float64arr) Len() int           { return len(a) }
 func (a float64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a float64arr) Less(i, j int) bool { return a[i] < a[j] }
+
+
+func startGA(c *cli.Context){
+	log.Info("HEREEE!")
+	config := checkFlags(c)
+	log.Info("HEREEE!")
+	ga := &GA{
+		N: config.Individuals,
+		Gens: config.Gens,
+		Config: config,
+		CurrentGen: 0,
+	}
+	log.Info("HEREEE!")
+
+	ga.Start()
+}

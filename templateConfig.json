@@ -23,6 +23,9 @@
     "MinIncrement": 1.0,
     "MarketEnd": 50,
     "TradingDays": 3
-  }
-
+  },
+  "Gens": 2,
+  "Individuals": 2,
+  "FitnesFN": "ALOC-EFF",
+  "CInit": "RANDOM"
 }
