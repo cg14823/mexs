@@ -7,6 +7,11 @@ import (
 	"math/big"
 	"mexs/common"
 	"time"
+	"os"
+	"encoding/csv"
+	"strconv"
+	"fmt"
+	"path/filepath"
 )
 
 type ZICTrader struct {
@@ -126,8 +131,12 @@ func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
 
 	// This code also assumes quantity matches, if it does not it
 	// ... should update execute order for correct quantity and limit price
+	if trade.SellOrder.TraderID == t.Info.TraderID {
+		t.Info.Balance += trade.Price - t.Info.ExecutionOrders[0].LimitPrice
+	} else {
+		t.Info.Balance += t.Info.ExecutionOrders[0].LimitPrice - trade.Price
+	}
 
-	t.Info.Balance += t.Info.ExecutionOrders[0].LimitPrice - trade.Price
 	t.RemoveOrder()
 
 	// In case trade is no longer possible this should return false
@@ -142,6 +151,49 @@ func (t *ZICTrader) MarketUpdate(info common.MarketUpdate) {
 
 func (t *ZICTrader) GetExecutionOrder() []*TraderOrder {
 	return t.Info.ExecutionOrders
+}
+
+func (t *ZICTrader) LogBalance(fileName string, day int, trade *common.Trade) {
+	fileName, err := filepath.Abs(fileName+"/ZICTradersLog.csv")
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  day,
+			"error":        err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+
+	addHeader := true
+	if _, err := os.Stat(fileName); err == nil {
+		addHeader = false
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer file.Close()
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  day,
+			"error":        err.Error(),
+		}).Error("ZIC trader CSV file could not be made")
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	if addHeader {
+		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "Profit", "TPrice",})
+	}
+
+	writer.Write([]string{
+		strconv.Itoa(day),
+		strconv.Itoa(trade.TimeStep),
+		strconv.Itoa(t.Info.TraderID),
+		strconv.Itoa(trade.TradeID),
+		fmt.Sprintf("%.5f",t.Info.Balance),
+		fmt.Sprintf("%.5f",trade.Price),
+	})
 }
 
 // Check robot interface correctly implemented

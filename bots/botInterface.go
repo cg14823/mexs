@@ -63,4 +63,5 @@ type RobotTrader interface {
 	MarketUpdate(update common.MarketUpdate)
 	GetOrder(timeStep int) *common.Order
 	GetExecutionOrder() []*TraderOrder
+	LogBalance(fileName string, day int, trade *common.Trade)
 }

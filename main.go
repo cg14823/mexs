@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"strconv"
 )
 
 type ConfigFile struct {
@@ -37,6 +38,8 @@ type ConfigFile struct {
 	Individuals int `json:"Individuals,omitempty"`
 	FitnessFN string `json:"FitnessFn, omitempty"`
 	CInit string `json:"CInit, omitempty"`
+	EQ float64 `json:"EQ, omitempty"`
+	EP float64 `json:"EP, omitempty"`
 }
 
 func init() {
@@ -130,6 +133,12 @@ func main() {
 			Action: startGA,
 			Flags: app.Flags,
 		},
+		cli.Command{
+			Name: "ItRun",
+			Usage: "Runs the same market multiple times",
+			Action: itRun,
+			Flags: app.Flags,
+		},
 	}
 
 	app.Name = "Minimal Exchange Simulator"
@@ -153,6 +162,8 @@ type ExperimentConfig struct {
 	Individuals int `json:"Individuals,omitempty"`
 	FitnessFN string `json:"FitnessFN, omitempty"`
 	CInit string `json:"CInit, omitempty"`
+	EP float64
+	EQ float64
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
@@ -330,7 +341,7 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 	}
 
 	for i, id := range configFile.BuyerIDs {
-		switch configFile.AlgoS[i] {
+		switch configFile.AlgoB[i] {
 		case "ZIP":
 			zipT := &bots.ZIPTrader{}
 			zipT.InitRobotCore(id, "BUYER", configFile.Info)
@@ -379,6 +390,8 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		Individuals:configFile.Individuals,
 		FitnessFN: configFile.FitnessFN,
 		CInit: configFile.CInit,
+		EQ: configFile.EQ,
+		EP: configFile.EP,
 	}
 }
 
@@ -560,16 +573,30 @@ func (a float64arr) Less(i, j int) bool { return a[i] < a[j] }
 
 
 func startGA(c *cli.Context){
-	log.Info("HEREEE!")
 	config := checkFlags(c)
-	log.Info("HEREEE!")
+
 	ga := &GA{
 		N: config.Individuals,
 		Gens: config.Gens,
 		Config: config,
 		CurrentGen: 0,
+		EquilibriumQuantity: config.EQ,
+		EquilibriumPrice: config.EP,
 	}
-	log.Info("HEREEE!")
+
 
 	ga.Start()
+}
+
+func itRun(c *cli.Context) {
+	runs := 50
+	for i:=0; i < runs; i++{
+		log.Warn("Run:",i)
+		config := checkFlags(c)
+		ex := exchange.Exchange{}
+		ex.Init(config.GA, config.MarketInfo, config.SellersIDs, config.BuyersIDs)
+		ex.SetTraders(config.Agents)
+		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule)
+		supplyAndDemandToCSV(config.Sps, config.Bps, config.EID+"_"+strconv.Itoa(i), "0")
+	}
 }

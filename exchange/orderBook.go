@@ -266,9 +266,9 @@ func (ob *OrderBook) RecordTrade(trade *common.Trade) error {
 	return nil
 }
 
-func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
+func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay int) {
 	// CSV file format is as follows TradeID,TradingDay,TimeStep,Price,SellerID,BuyerID,SellerPrice,BuyerPrice
-	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/TRADES_%d_%d.csv", experimentID, tradingDay, maxTD))
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/TRADES.csv", experimentID))
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Trading Day":  tradingDay,
@@ -277,8 +277,15 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
 		}).Error("File Path not found")
 		return
 	}
-	file, err := os.Create(fileName)
+
+	addHeader := true
+	if _, err := os.Stat(fileName); err == nil {
+		addHeader = false
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
+
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Trading Day":  tradingDay,
@@ -290,7 +297,11 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
-	writer.Write([]string{"ID", "TradingDay", "TimeStep", "Price", "SellerID", "BuyerID", "AskPrice", "BidPrice"})
+
+	if addHeader {
+		writer.Write([]string{"ID", "TradingDay", "TimeStep", "Price", "SellerID", "BuyerID", "AskPrice", "BidPrice"})
+	}
+
 	for _, trade := range ob.tradeRecord {
 		row := []string{
 			strconv.Itoa(trade.TradeID),
@@ -307,5 +318,3 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay, maxTD int) {
 
 	log.Debug("Trades saved to file:", fileName)
 }
-
-// TODO: IMPLEMENT BID TO CSV and ASK to CSV

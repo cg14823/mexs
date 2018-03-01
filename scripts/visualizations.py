@@ -32,7 +32,6 @@ def trades(eid):
         ax.grid()
         ax.legend()
 
-    plt.show()
 
 
 def supplyDemand(eid):
@@ -96,7 +95,6 @@ def supplyDemand(eid):
             ax.plot([0, qe], [pe, pe], linestyle='-', color="b")
             ax.plot([qe,qe], [0, pe], linestyle='-', color="b")
         ax.legend()
-    plt.show()
 
 def main():
     print(sys.argv)
@@ -113,6 +111,8 @@ def main():
         else:
             trades(eid)
             supplyDemand(eid)
+        
+         plt.show()
 
 if __name__ == "__main__":
     main()

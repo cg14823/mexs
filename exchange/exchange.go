@@ -9,6 +9,10 @@ import (
 	"mexs/common"
 	"os"
 	"time"
+	"path/filepath"
+	"encoding/csv"
+	"fmt"
+	"strconv"
 )
 
 // AuctionParameters are the ones to be evolved by the GA
@@ -51,6 +55,7 @@ type TID2RTO struct {
 *   -
  */
 type Exchange struct {
+	EID string
 	GAVector   AuctionParameters
 	Info       common.MarketInfo
 	orderBook  OrderBook
@@ -100,7 +105,7 @@ func (ex *Exchange) PriceMatch(bid, ask *common.Order) *common.Trade {
 	}
 }
 
-func (ex *Exchange) MakeTrades(timeStep int) {
+func (ex *Exchange) MakeTrades(timeStep, d int) {
 	// NOTE: This function is designed for the time step, single unit approach
 	// for a multi unit asynchronous system this function should be called
 	// every time an order is received and block until end
@@ -133,6 +138,8 @@ func (ex *Exchange) MakeTrades(timeStep int) {
 
 	ex.agents[bid.TraderID].TradeMade(trade)
 	ex.agents[ask.TraderID].TradeMade(trade)
+	ex.agents[bid.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
+	ex.agents[ask.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
 	log.WithFields(log.Fields{
 		"Time step": timeStep,
 		"BuyerID":   bid.TraderID,
@@ -141,7 +148,7 @@ func (ex *Exchange) MakeTrades(timeStep int) {
 	}).Info("Trade made!")
 }
 
-func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
+func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 	traderType := "NONE"
 
 	for tries := 0; tries < ex.AgentNum; tries++ {
@@ -168,6 +175,7 @@ func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
 				ex.asks++
 			}
 			log.Debugf("Bids ask %d:%d", ex.bids,ex.asks)
+			logOrderToCSV(order, d, eid, "TRUE", "N/A")
 			return true, order
 		}
 
@@ -178,8 +186,55 @@ func (ex *Exchange) GetTraderOrder(t int) (bool, *common.Order) {
 			"TraderID":         traderID,
 			"Agent has orders": len(agent.GetExecutionOrder()),
 		}).Debug("Order did not comply")
+		logOrderToCSV(order, d, eid, "FALSE", "N/A")
 	}
 	return false, &common.Order{}
+}
+
+func logOrderToCSV(order *common.Order, day int, experimentID, accepted, reason string){
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/ALLORDERS.csv", experimentID))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  day,
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+
+	addHeader := true
+	if _, err := os.Stat(fileName); err == nil {
+		addHeader = false
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer file.Close()
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day":  day,
+			"experimentID": experimentID,
+			"error":        err.Error(),
+		}).Error("Trade CSV file could not be made")
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	if addHeader {
+		writer.Write([]string{"Day", "TimeStep", "OrderType", "TID", "PRICE", "ACCEPTED", "REASON"})
+	}
+
+	writer.Write([]string{
+		strconv.Itoa(day),
+		strconv.Itoa(order.TimeStep),
+		order.OrderType,
+		strconv.Itoa(order.TraderID),
+		fmt.Sprintf("%.5f",order.Price),
+		accepted,
+		reason,
+	})
 }
 
 func (ex *Exchange) EnforceBidToAskRatio(traderType string, t int) (string, int) {
@@ -396,6 +451,7 @@ func (ex *Exchange) UpdateAgents(timeStep int) {
 }
 
 func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
+	ex.EID = experimentID
 	log.WithFields(log.Fields{
 		"Trading days":        ex.Info.TradingDays,
 		"Training time steps": ex.Info.MarketEnd,
@@ -419,7 +475,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 			log.Info("Time-step:", t)
 			ex.RenewExecOrders(t, d, s)
 
-			ok, order := ex.GetTraderOrder(t)
+			ok, order := ex.GetTraderOrder(t, d, experimentID)
 			if ok {
 				err := ex.orderBook.AddOrder(order)
 				if err == nil {
@@ -440,7 +496,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 				}).Info("No order was received this time step")
 			}
 
-			ex.MakeTrades(t)
+			ex.MakeTrades(t, d)
 			ex.UpdateAgents(t)
 		}
 
@@ -450,7 +506,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 			"Asks":   ex.asks,
 		}).Info("Trading day ended")
 		// TODO: store order books in database at the end of each day
-		ex.orderBook.TradesToCSV(experimentID, d, ex.Info.TradingDays)
+		ex.orderBook.TradesToCSV(experimentID, d)
 	}
 	// TODO: Persistent save of data
 	log.WithFields(log.Fields{
