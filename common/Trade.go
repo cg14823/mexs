@@ -20,6 +20,8 @@ type MarketInfo struct {
 //TODO: CHECK IF this is all that is needed
 type MarketUpdate struct {
 	TimeStep  int
+	Day       int
+	EID       string
 	BestAsk   float64
 	BestBid   float64
 	Bids      []*Order

@@ -15,9 +15,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 )
 
 type ConfigFile struct {
@@ -34,12 +34,12 @@ type ConfigFile struct {
 	Bps          []float64         `json:"Bps"`
 	ScheduleType string            `json:"ScheduleType"`
 	Info         common.MarketInfo `json:"MarketInfo"`
-	Gens int `json:"Gens,omitempty"`
-	Individuals int `json:"Individuals,omitempty"`
-	FitnessFN string `json:"FitnessFn, omitempty"`
-	CInit string `json:"CInit, omitempty"`
-	EQ float64 `json:"EQ, omitempty"`
-	EP float64 `json:"EP, omitempty"`
+	Gens         int               `json:"Gens,omitempty"`
+	Individuals  int               `json:"Individuals,omitempty"`
+	FitnessFN    string            `json:"FitnessFn, omitempty"`
+	CInit        string            `json:"CInit, omitempty"`
+	EQ           float64           `json:"EQ, omitempty"`
+	EP           float64           `json:"EP, omitempty"`
 }
 
 func init() {
@@ -128,16 +128,16 @@ func main() {
 			Flags:  app.Flags,
 		},
 		cli.Command{
-			Name: "GA",
-			Usage: "Start a evolution process",
+			Name:   "GA",
+			Usage:  "Start a evolution process",
 			Action: startGA,
-			Flags: app.Flags,
+			Flags:  app.Flags,
 		},
 		cli.Command{
-			Name: "ItRun",
-			Usage: "Runs the same market multiple times",
+			Name:   "ItRun",
+			Usage:  "Runs the same market multiple times",
 			Action: itRun,
-			Flags: app.Flags,
+			Flags:  app.Flags,
 		},
 	}
 
@@ -147,23 +147,23 @@ func main() {
 }
 
 type ExperimentConfig struct {
-	GA         exchange.AuctionParameters
-	EID        string
-	Ts         int
-	Days       int
-	SellersIDs []int
-	BuyersIDs  []int
-	Agents     map[int]bots.RobotTrader
-	Schedule   exchange.AllocationSchedule
-	MarketInfo common.MarketInfo
-	Sps        []float64
-	Bps        []float64
-	Gens int `json:"Gens,omitempty"`
-	Individuals int `json:"Individuals,omitempty"`
-	FitnessFN string `json:"FitnessFN, omitempty"`
-	CInit string `json:"CInit, omitempty"`
-	EP float64
-	EQ float64
+	GA          exchange.AuctionParameters
+	EID         string
+	Ts          int
+	Days        int
+	SellersIDs  []int
+	BuyersIDs   []int
+	Agents      map[int]bots.RobotTrader
+	Schedule    exchange.AllocationSchedule
+	MarketInfo  common.MarketInfo
+	Sps         []float64
+	Bps         []float64
+	Gens        int    `json:"Gens,omitempty"`
+	Individuals int    `json:"Individuals,omitempty"`
+	FitnessFN   string `json:"FitnessFN, omitempty"`
+	CInit       string `json:"CInit, omitempty"`
+	EP          float64
+	EQ          float64
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
@@ -385,13 +385,13 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		Sps:        configFile.Sps,
 		Bps:        configFile.Bps,
 		// For now only standard schedule accepted
-		Schedule: generateBasicAllocationSchedule(traders),
-		Gens: configFile.Gens,
-		Individuals:configFile.Individuals,
-		FitnessFN: configFile.FitnessFN,
-		CInit: configFile.CInit,
-		EQ: configFile.EQ,
-		EP: configFile.EP,
+		Schedule:    generateBasicAllocationSchedule(traders),
+		Gens:        configFile.Gens,
+		Individuals: configFile.Individuals,
+		FitnessFN:   configFile.FitnessFN,
+		CInit:       configFile.CInit,
+		EQ:          configFile.EQ,
+		EP:          configFile.EP,
 	}
 }
 
@@ -402,7 +402,7 @@ func experiment(c *cli.Context) {
 	ex.Init(eConfig.GA, eConfig.MarketInfo, eConfig.SellersIDs, eConfig.BuyersIDs)
 	ex.SetTraders(eConfig.Agents)
 	ex.StartMarket(eConfig.EID, eConfig.Schedule)
-	supplyAndDemandToCSV(eConfig.Sps, eConfig.Bps, eConfig.EID, "1")
+	supplyAndDemandToCSV(eConfig.Sps, eConfig.Bps, eConfig.EID, "0")
 }
 
 // TODO: create a cli interfaces to setup experiment with out having to go
@@ -458,7 +458,7 @@ func main1() {
 
 	for i := 0; i < sellersN; i++ {
 		zip := &bots.ZIPTrader{}
-		zip.InitRobotCore(i+buyersN, "sellers", marketInfo)
+		zip.InitRobotCore(i+buyersN, "SELLER", marketInfo)
 		zip.AddOrder(&bots.TraderOrder{
 			LimitPrice: sellerPrices[i],
 			Quantity:   1,
@@ -571,27 +571,25 @@ func (a float64arr) Len() int           { return len(a) }
 func (a float64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a float64arr) Less(i, j int) bool { return a[i] < a[j] }
 
-
-func startGA(c *cli.Context){
+func startGA(c *cli.Context) {
 	config := checkFlags(c)
 
 	ga := &GA{
-		N: config.Individuals,
-		Gens: config.Gens,
-		Config: config,
-		CurrentGen: 0,
+		N:                   config.Individuals,
+		Gens:                config.Gens,
+		Config:              config,
+		CurrentGen:          0,
 		EquilibriumQuantity: config.EQ,
-		EquilibriumPrice: config.EP,
+		EquilibriumPrice:    config.EP,
 	}
-
 
 	ga.Start()
 }
 
 func itRun(c *cli.Context) {
-	runs := 50
-	for i:=0; i < runs; i++{
-		log.Warn("Run:",i)
+	runs := 100
+	for i := 0; i < runs; i++ {
+		log.Warn("Run:", i)
 		config := checkFlags(c)
 		ex := exchange.Exchange{}
 		ex.Init(config.GA, config.MarketInfo, config.SellersIDs, config.BuyersIDs)

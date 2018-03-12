@@ -2,17 +2,17 @@ package exchange
 
 import (
 	"crypto/rand"
+	"encoding/csv"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"math"
 	"math/big"
 	"mexs/bots"
 	"mexs/common"
 	"os"
-	"time"
 	"path/filepath"
-	"encoding/csv"
-	"fmt"
 	"strconv"
+	"time"
 )
 
 // AuctionParameters are the ones to be evolved by the GA
@@ -55,7 +55,7 @@ type TID2RTO struct {
 *   -
  */
 type Exchange struct {
-	EID string
+	EID        string
 	GAVector   AuctionParameters
 	Info       common.MarketInfo
 	orderBook  OrderBook
@@ -136,6 +136,8 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 		return
 	}
 
+	ex.agents[bid.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
+	ex.agents[ask.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
 	ex.agents[bid.TraderID].TradeMade(trade)
 	ex.agents[ask.TraderID].TradeMade(trade)
 	ex.agents[bid.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
@@ -150,9 +152,7 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 
 func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 	traderType := "NONE"
-
-	for tries := 0; tries < ex.AgentNum; tries++ {
-
+	for tries := 0; tries < 10; tries++ {
 		traderType1, traderID := ex.EnforceBidToAskRatio(traderType, t)
 		traderType = traderType1
 		var agent bots.RobotTrader = ex.agents[traderID]
@@ -167,14 +167,14 @@ func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 			continue
 		}
 
-		validOrder := ex.OrderComplies(order, t)
+		validOrder, reason := ex.OrderComplies(order, t)
 		if validOrder {
 			if order.OrderType == "BID" {
 				ex.bids++
 			} else {
 				ex.asks++
 			}
-			log.Debugf("Bids ask %d:%d", ex.bids,ex.asks)
+			log.Debugf("Bids ask %d:%d", ex.bids, ex.asks)
 			logOrderToCSV(order, d, eid, "TRUE", "N/A")
 			return true, order
 		}
@@ -186,12 +186,12 @@ func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 			"TraderID":         traderID,
 			"Agent has orders": len(agent.GetExecutionOrder()),
 		}).Debug("Order did not comply")
-		logOrderToCSV(order, d, eid, "FALSE", "N/A")
+		logOrderToCSV(order, d, eid, "FALSE", reason)
 	}
 	return false, &common.Order{}
 }
 
-func logOrderToCSV(order *common.Order, day int, experimentID, accepted, reason string){
+func logOrderToCSV(order *common.Order, day int, experimentID, accepted, reason string) {
 	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/ALLORDERS.csv", experimentID))
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -231,7 +231,7 @@ func logOrderToCSV(order *common.Order, day int, experimentID, accepted, reason 
 		strconv.Itoa(order.TimeStep),
 		order.OrderType,
 		strconv.Itoa(order.TraderID),
-		fmt.Sprintf("%.5f",order.Price),
+		fmt.Sprintf("%.5f", order.Price),
 		accepted,
 		reason,
 	})
@@ -327,27 +327,34 @@ func (ex *Exchange) getRandomTrader(traderType string) int {
 	return int(val.Int64())
 }
 
-func (ex *Exchange) OrderComplies(order *common.Order, t int) bool {
+func (ex *Exchange) OrderComplies(order *common.Order, t int) (bool, string) {
 	// It will check that the order follows the market rules
 	// bid/ask ratio is controlled by the number of sellers versus the
 	// number of buyers assuming that the next trader is chosen perfectly at random
 	// then bid/ask ratio should tend to be equal to buyer/seller ratio
 
-	//KPricing is implemented in the PriceMatch function
-
-	// Here we deal with the minimum increment rule
-	valid := ex.MinimumIncrementRule(order)
-	if !valid {
-		return valid
+	//Between max and min values of the system
+	if order.Price > ex.Info.MaxPrice || order.Price < ex.Info.MinPrice {
+		return false, "Not invalid price range"
 	}
+
+	valid := true
+	// Here we deal with the minimum increment rule
+	//valid := ex.MinimumIncrementRule(order)
+	//if !valid {
+	//	return valid, "Does not pass minimum increment"
+	//}
 
 	valid = ex.MaxShift(order)
 	if !valid {
-		return valid
+		return valid, "Does not pass max shift"
 	}
 
 	valid = ex.DominanceRule(order, t)
-	return valid
+	if !valid {
+		return valid, "Does not pass max shift"
+	}
+	return valid, "PASSES"
 }
 
 func (ex *Exchange) DominanceRule(order *common.Order, t int) bool {
@@ -429,7 +436,7 @@ func (ex *Exchange) MinimumIncrementRule(order *common.Order) bool {
 	return true
 }
 
-func (ex *Exchange) UpdateAgents(timeStep int) {
+func (ex *Exchange) UpdateAgents(timeStep, day int) {
 	ex.orderBook.askBook.SetBestData()
 	ex.orderBook.bidBook.SetBestData()
 	bestAsk := ex.orderBook.askBook.BestPrice
@@ -437,6 +444,8 @@ func (ex *Exchange) UpdateAgents(timeStep int) {
 
 	marketUpdate := common.MarketUpdate{
 		TimeStep:  timeStep,
+		Day:       day,
+		EID:       ex.EID,
 		BestAsk:   bestAsk,
 		BestBid:   bestBid,
 		Bids:      ex.orderBook.bidBook.OrdersToList(),
@@ -497,7 +506,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 			}
 
 			ex.MakeTrades(t, d)
-			ex.UpdateAgents(t)
+			ex.UpdateAgents(t, d)
 		}
 
 		log.WithFields(log.Fields{
@@ -524,6 +533,8 @@ func (ex *Exchange) RenewExecOrders(t, d int, s AllocationSchedule) {
 			orders := s.Schedule[d][t]
 			for i := 0; i < len(orders); i++ {
 				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
+				ex.agents[orders[i].TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, t, -1, -1.0)
+
 			}
 		}
 	}
@@ -533,6 +544,7 @@ func (ex *Exchange) RenewExecOrders(t, d int, s AllocationSchedule) {
 			orders := s.Schedule[-1][t]
 			for i := 0; i < len(orders); i++ {
 				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
+				ex.agents[orders[i].TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, t, -1, -1.0)
 			}
 		}
 	}

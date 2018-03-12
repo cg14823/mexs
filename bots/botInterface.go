@@ -27,6 +27,8 @@ type RobotCore struct {
 	// Balance is money made by the agent
 	// Balance = LimitPrice - transaction price
 	Balance float64
+
+	EID string
 }
 
 // TraderOrders encapsulate what the traders are supposed to do
@@ -64,4 +66,5 @@ type RobotTrader interface {
 	GetOrder(timeStep int) *common.Order
 	GetExecutionOrder() []*TraderOrder
 	LogBalance(fileName string, day int, trade *common.Trade)
+	LogOrder(fileName string, d, ts, tradeID int, tPrice float64)
 }

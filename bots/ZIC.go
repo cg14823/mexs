@@ -2,16 +2,16 @@ package bots
 
 import (
 	"crypto/rand"
+	"encoding/csv"
 	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"math/big"
 	"mexs/common"
-	"time"
 	"os"
-	"encoding/csv"
-	"strconv"
-	"fmt"
 	"path/filepath"
+	"strconv"
+	"time"
 )
 
 type ZICTrader struct {
@@ -154,11 +154,11 @@ func (t *ZICTrader) GetExecutionOrder() []*TraderOrder {
 }
 
 func (t *ZICTrader) LogBalance(fileName string, day int, trade *common.Trade) {
-	fileName, err := filepath.Abs(fileName+"/ZICTradersLog.csv")
+	fileName, err := filepath.Abs(fileName + "/ZICTradersLog.csv")
 	if err != nil {
 		log.WithFields(log.Fields{
-			"Trading Day":  day,
-			"error":        err.Error(),
+			"Trading Day": day,
+			"error":       err.Error(),
 		}).Error("File Path not found")
 		return
 	}
@@ -173,8 +173,8 @@ func (t *ZICTrader) LogBalance(fileName string, day int, trade *common.Trade) {
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"Trading Day":  day,
-			"error":        err.Error(),
+			"Trading Day": day,
+			"error":       err.Error(),
 		}).Error("ZIC trader CSV file could not be made")
 		return
 	}
@@ -183,7 +183,7 @@ func (t *ZICTrader) LogBalance(fileName string, day int, trade *common.Trade) {
 	defer writer.Flush()
 
 	if addHeader {
-		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "Profit", "TPrice",})
+		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "Profit", "TPrice"})
 	}
 
 	writer.Write([]string{
@@ -191,8 +191,55 @@ func (t *ZICTrader) LogBalance(fileName string, day int, trade *common.Trade) {
 		strconv.Itoa(trade.TimeStep),
 		strconv.Itoa(t.Info.TraderID),
 		strconv.Itoa(trade.TradeID),
-		fmt.Sprintf("%.5f",t.Info.Balance),
-		fmt.Sprintf("%.5f",trade.Price),
+		fmt.Sprintf("%.5f", t.Info.Balance),
+		fmt.Sprintf("%.5f", trade.Price),
+	})
+}
+
+func (t *ZICTrader) LogOrder(fileName string, d, ts, tradeID int, tPrice float64) {
+	if len(t.Info.ExecutionOrders) == 0 {
+		return
+	}
+	// For now assume agents have only one order at a time
+	fileName, err := filepath.Abs(fileName)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day": d,
+			"error":       err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+	addHeader := true
+	if _, err := os.Stat(fileName); err == nil {
+		addHeader = false
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer file.Close()
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Trading Day": d,
+			"error":       err.Error(),
+		}).Error("ZIP exec order CSV file could not be made")
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	if addHeader {
+		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "LimitPrice", "TPrice", "OType"})
+	}
+
+	writer.Write([]string{
+		strconv.Itoa(d),
+		strconv.Itoa(ts),
+		strconv.Itoa(t.Info.TraderID),
+		strconv.Itoa(tradeID),
+		fmt.Sprintf("%.5f", t.Info.ExecutionOrders[0].LimitPrice),
+		fmt.Sprintf("%.5f", tPrice),
+		t.Info.ExecutionOrders[0].Type,
 	})
 }
 

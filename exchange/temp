@@ -1,0 +1,85 @@
+bidImproved := false
+	bidHit := false
+	if update.BestBid != -1 {
+		// Non empty bid lob
+		if t.prevBestBidPrice < update.BestBid {
+			// best bid has improved
+			// NOTE: NB doesn't check if the improvement was by self SHOULD IT?
+			bidImproved = true
+		} else if update.LastTrade.TimeStep == update.TimeStep &&
+			t.prevBestBidPrice >= update.BestBid {
+			bidHit = true
+		}
+	} else if t.prevBestBidPrice != -1 {
+		bidHit = true
+	}
+
+	askImporved := false
+	askLifted := false
+	if update.BestAsk != -1 {
+		// Non empty ask lob
+		if t.prevBestAskPrice > update.BestAsk {
+			askImporved = true
+		} else if update.LastTrade.TimeStep == update.TimeStep &&
+			t.prevBestAskPrice <= update.BestAsk {
+			askLifted = true
+		}
+	} else if t.prevBestAskPrice != -1 {
+		askLifted = true
+	}
+
+	//log.WithFields(log.Fields{
+	//	"TraderID":     t.Info.TraderID,
+	//	"Bid Improved": bidImproved,
+	//	"Bid Hit":      bidHit,
+	//	"Ask Improved": askImporved,
+	//	"Ask Lifted":   askLifted,
+	//}).Debug("ZIP trader update")
+
+	deal := bidHit || askLifted
+
+	if t.job.IsAsk() {
+		if deal {
+			if t.price <= update.LastTrade.Price {
+				targetPrice := t.targetUp(update.LastTrade.Price)
+				t.profitAlter(targetPrice)
+			} else if askLifted && t.active && !t.willingToTrade(update.LastTrade.Price) {
+				targetPrice := t.targetDown(update.LastTrade.Price)
+				t.profitAlter(targetPrice)
+			}
+		} else {
+			// no deal: aim for a target price higher than bid best bid
+			if askImporved && t.price > update.BestAsk {
+				if update.BestBid != -1 {
+					targetPrice := t.targetUp(update.BestBid)
+					t.profitAlter(targetPrice)
+				} else {
+					sort.Sort(common.ByPrice(update.Asks))
+					t.profitAlter(update.Asks[0].Price)
+				}
+			}
+		}
+	} else if t.job.IsBid() {
+		if deal {
+			if t.price >= update.LastTrade.Price {
+				targetPrice := t.targetDown(update.LastTrade.Price)
+				t.profitAlter(targetPrice)
+			} else if bidHit && t.active && !t.willingToTrade(update.LastTrade.Price) {
+				targetPrice := t.targetUp(update.LastTrade.Price)
+				t.profitAlter(targetPrice)
+			}
+		} else {
+			if bidImproved && t.price < update.BestBid {
+				if update.BestAsk != -1 {
+					targetPrice := t.targetDown(update.BestAsk)
+					t.profitAlter(targetPrice)
+				} else {
+					sort.Sort(common.ByPrice(update.Bids))
+					t.profitAlter(update.Bids[0].Price)
+				}
+			}
+		}
+	}
+
+	t.prevBestBidPrice = update.BestBid
+	t.prevBestAskPrice = update.BestAsk

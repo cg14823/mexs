@@ -4,28 +4,29 @@ import pandas as pd
 import sys
 import glob
 
-def trades(eid):
-    files = glob.glob('../logs/{}/TRADES_*_*.csv'.format(eid))
+def trades(eid, ep=None):
+    f = '../logs/{}/TRADES.csv'.format(eid)
 
-    for f in files:
-        trades = np.genfromtxt(fname=f, delimiter=",", names=True)
-        low = f.find('_')
-        end = f.find('.csv')
-        substr = f[low+1:end]
-        devider = substr.find('_')
-        day = substr[:devider]
-        maxDay = substr[devider+1:]
-    
-        figT = plt.figure("Trade Prices day {} / {}:".format(day, maxDay))
+    trades = pd.read_csv(filepath_or_buffer=f)
+    maxDay = trades['TradingDay'].max()
+    for d in range(maxDay + 1):
+        ts = trades.loc[(trades['TradingDay'] == d)]
+
+
+        figT = plt.figure("Trade Prices day {} / {}:".format(d, maxDay))
         ax = figT.add_subplot(111)
 
-        meanPrice = np.mean(trades["Price"])
-        maxTimeStep = np.max(trades["TimeStep"])
+        meanPrice = np.mean(ts["Price"])
+        maxTimeStep = np.max(ts["TimeStep"])
+        if ts["TimeStep"].count() == 0:
+            maxTimeStep = 10
         timeSteps = [0, maxTimeStep + 1]
 
-        ax.plot(trades["TimeStep"], trades["Price"], 'ro', label="Trades")
-        ax.plot(trades["TimeStep"], trades["Price"], 'r')
+        ax.plot(ts["TimeStep"], ts["Price"], 'ro', label="Trades")
+        ax.plot(ts["TimeStep"], ts["Price"], 'r')
         ax.plot(timeSteps, [meanPrice, meanPrice], label="Mean trade price")
+        if (not ep == None) and (not ep == []):
+            ax.plot(timeSteps, [ep[0], ep[0]], linestyle ='--', color='g', label="Equilibirum Price")
         ax.set_xlabel("Time Steps")
         ax.set_ylabel("Price")
         ax.set_xlim(timeSteps[0], timeSteps[1])
@@ -36,13 +37,14 @@ def trades(eid):
 
 def supplyDemand(eid):
     files = glob.glob('../logs/'+eid+'/LIMITPRICES_*.csv')
+    prices_times = []
     for f in files:
         trades = pd.read_csv(filepath_or_buffer=f)
-        demand = trades.loc[(trades["TYPE"] == "BID") & (trades["NUMBER"] == 1)].sort_values(by=['LIMIT_PRICE'],ascending=False).as_matrix(['LIMIT_PRICE'])
-        supply = trades.loc[(trades["TYPE"] == "ASK") & (trades["NUMBER"] == 1)].sort_values(by=['LIMIT_PRICE'],ascending=True).as_matrix(['LIMIT_PRICE'])
+        demand = trades.loc[(trades["TYPE"] == "BID") & (trades["NUMBER"] == 0)].sort_values(by=['LIMIT_PRICE'],ascending=False).as_matrix(['LIMIT_PRICE'])
+        supply = trades.loc[(trades["TYPE"] == "ASK") & (trades["NUMBER"] == 0)].sort_values(by=['LIMIT_PRICE'],ascending=True).as_matrix(['LIMIT_PRICE'])
 
-        quantityD = np.asarray(range(0,len(demand[:,0]), 1))
-        quantityS = np.asarray(range(0,len(supply[:,0]), 1))
+        quantityD = np.asarray(range(0,len(demand[:,0])+1, 1))
+        quantityS = np.asarray(range(0,len(supply[:,0])+1, 1))
 
         # #  This only work for linearish graphs, if the graphs where exponential another formula should be used
         # # Better way would be using a line intersection algorithm
@@ -73,11 +75,11 @@ def supplyDemand(eid):
             elif demand[di] == supply[si]:
                 found =True
                 pe = demand[di]
-                qe = si - 1 
+                qe = si 
             else:
                 found = True
                 pe = (demand[di] +supply[si]) / 2.0
-                qe = (di - 1 + si -1)/2.0
+                qe = (di + si)/2.0
 
         number = f[f.find('_')+1:f.find('.csv')]
         figSD = plt.figure("Supply demand curve #{}".format(number))
@@ -85,16 +87,25 @@ def supplyDemand(eid):
         ax.set_xlabel("Quantity")
         ax.set_ylabel("Price")
         ax.set_xlim((0, (max(quantityD[-1], quantityS[-1])+1)))
-        ax.set_ylim(0, max(demand[0], supply[-1]) +1)
+        ax.set_ylim(min(demand[-1], supply[0]) - 5, max(demand[0], supply[-1]) + 5)
         ax.grid()
+        dee = demand[:,0].tolist()
+        suu = supply[:,0].tolist()
+        dee = [dee[0]] + dee
+        suu = [suu[0]] + suu
+        print(dee)
         ax.xaxis.set_ticks(range(0, max(quantityD[-1], quantityS[-1])+1))
-        ax.step(quantityD, demand[:,0], 'r', label="demand")
-        ax.step(quantityS, supply[:,0], 'g', label="supply")
+        ax.step(quantityD, dee, 'r', label="demand")
+        ax.step(quantityS, suu, 'g', label="supply")
 
         if found:
             ax.plot([0, qe], [pe, pe], linestyle='-', color="b")
             ax.plot([qe,qe], [0, pe], linestyle='-', color="b")
+            print(pe)
+            prices_times.append(pe)
         ax.legend()
+
+    return prices_times
 
 def main():
     print(sys.argv)
@@ -109,10 +120,10 @@ def main():
         elif action == "sd":
             supplyDemand(eid)
         else:
-            trades(eid)
-            supplyDemand(eid)
+            pricesTimes = supplyDemand(eid)
+            trades(eid, pricesTimes)
         
-         plt.show()
+        plt.show()
 
 if __name__ == "__main__":
     main()
