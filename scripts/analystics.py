@@ -176,6 +176,6 @@ def effSingle(rootP):
     with open(rootP+'/analytics.json', 'w') as out:
         json.dump(data, out, indent=4)
 
-ibmTest('../logs/IBMTest/runs__', '../logs/IBMTest/')
+# ibmTest('../logs/IBMTest/runs__', '../logs/IBMTest/')
 #ibmTest('../logs/ZIPDebug100/runs_', '../logs/ZIPDebug100/')
-#effSingle('../logs/mnominincrement')
+effSingle('../logs/EERuleW3D5')

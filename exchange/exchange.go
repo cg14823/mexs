@@ -23,12 +23,17 @@ type AuctionParameters struct {
 	KPricing float64 `json:"KPricing"`
 	// The minimum increment in the next bid
 	// If it is 0 it means there is no shout/spread improvement
+	// This is to implement some sort of NYSE shout improvement
 	MinIncrement float64 `json:"MinIncrement"`
 	// MaxShift is the maximum percentage a trader can move the current price
 	MaxShift float64 `json:"MaxShift"`
 	// Dominance defines how many traders have to trade before the
 	// same trader is allowed to put in a bid/ask again 0 means no dominance
 	Dominance int `json:"Dominance"`
+	// Sliding Window size for EE shout improvement rule
+	WindowSizeEE int `json:"WindowSizeEE"`
+	// DeltaEE is the relaxing parameter in EE shout improvement rule
+	DeltaEE float64 `json:"DeltaEE"`
 	// OrderQueueing is the number of orders one trader can have queued
 	// for now fixed to 1
 	OrderQueuing int `json:"OrderQueuing,omitempty"`
@@ -66,6 +71,7 @@ type Exchange struct {
 	bids       int
 	asks       int
 	trades     int
+	tradeRecordPrice []float64
 }
 
 func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo, sellers, buyers []int) {
@@ -80,6 +86,7 @@ func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo, sel
 	ex.bids = 0
 	ex.asks = 0
 	ex.trades = 0
+	ex.tradeRecordPrice = make([]float64, GAVector.WindowSizeEE)
 }
 
 func (ex *Exchange) SetTraders(traders map[int]bots.RobotTrader) {
@@ -128,13 +135,16 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 	// NOTE: This code is smelly, it assumes agents accept trade and can not refuse
 	// once the order is posted for any reason
 	err := ex.orderBook.RecordTrade(trade)
-	ex.trades++
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Time step": timeStep,
 		}).Error("Trade could not be made Error:", err)
 		return
 	}
+
+	// add trade price to trade record to use with EE shout improvement rule
+	ex.tradeRecordPrice[ex.trades % ex.GAVector.WindowSizeEE] = trade.Price
+	ex.trades++
 
 	ex.agents[bid.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
 	ex.agents[ask.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
@@ -329,21 +339,22 @@ func (ex *Exchange) getRandomTrader(traderType string) int {
 
 func (ex *Exchange) OrderComplies(order *common.Order, t int) (bool, string) {
 	// It will check that the order follows the market rules
-	// bid/ask ratio is controlled by the number of sellers versus the
-	// number of buyers assuming that the next trader is chosen perfectly at random
-	// then bid/ask ratio should tend to be equal to buyer/seller ratio
 
 	//Between max and min values of the system
 	if order.Price > ex.Info.MaxPrice || order.Price < ex.Info.MinPrice {
 		return false, "Not invalid price range"
 	}
 
-	valid := true
-	// Here we deal with the minimum increment rule
-	//valid := ex.MinimumIncrementRule(order)
+	// Here we deal with the minimum increment rule NYSE style rule
+	//valid := ex.ShoutImprovementRule(order)
 	//if !valid {
 	//	return valid, "Does not pass minimum increment"
 	//}
+	// EE shout improvemnt
+	valid := ex.EEShoutImprovement(order)
+	if !valid {
+		return valid, "Does not pass minimum increment"
+	}
 
 	valid = ex.MaxShift(order)
 	if !valid {
@@ -386,6 +397,35 @@ func (ex *Exchange) DominanceRule(order *common.Order, t int) bool {
 	return true
 }
 
+func (ex *Exchange) EEShoutImprovement (order *common.Order) bool {
+	// This rule https://www.researchgate.net/publication/221455475_Reducing_price_fluctuation_in_continuous_double_auctions_through_pricing_policy_and_shout_improvement
+	// The rule keeps an estimate of the equilibrium price using an estimate of the equilibrium price Pe
+	// Pe = (1/m) * sum_0_m(Pi)
+	// where m is the size of the sliding window
+	// then all bids above Pe - delta are accepted
+	// and all asks bellow Pe + delta are accepted
+	// Tunable parameters are m and delta
+	if ex.trades < ex.GAVector.WindowSizeEE {
+		// Not enough trades to estimate Pe so accept all bids and asks
+		return true
+	}
+
+	pe := 1.0 / float64(ex.GAVector.WindowSizeEE)
+	sum := 0.0
+	for i:=0; i < ex.GAVector.WindowSizeEE; i++ {
+		sum += ex.tradeRecordPrice[i]
+	}
+	pe = pe * sum
+
+	if order.OrderType == "BID" && order.Price >= (pe - ex.GAVector.DeltaEE) {
+		return true
+	} else if order.OrderType == "ASK" && order.Price <= (pe + ex.GAVector.DeltaEE) {
+		return true
+	}
+
+	return false
+}
+
 func (ex *Exchange) MaxShift(order *common.Order) bool {
 	// This maximum shift rule defines the maximum amount any seller can shift the
 	// Price, it is based on the last transaction
@@ -406,7 +446,7 @@ func (ex *Exchange) MaxShift(order *common.Order) bool {
 	return false
 }
 
-func (ex *Exchange) MinimumIncrementRule(order *common.Order) bool {
+func (ex *Exchange) ShoutImprovementRule(order *common.Order) bool {
 	if order.OrderType == "BID" {
 		if ex.orderBook.bidBook.BestPrice != -1 {
 			if ex.orderBook.bidBook.BestPrice+ex.GAVector.MinIncrement > order.Price {

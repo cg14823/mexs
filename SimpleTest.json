@@ -5,6 +5,8 @@
     "MinIncrement": 0.5,
     "MaxShift": 200,
     "Dominance": 0,
+    "WindowSizeEE": 3,
+    "DeltaEE": 5.0,
     "OrderQueuing": 1
   },
   "EID": "",

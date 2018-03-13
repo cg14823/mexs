@@ -215,6 +215,8 @@ func checkFlags(c *cli.Context) ExperimentConfig {
 		KPricing:     0.5,
 		MinIncrement: 1,
 		MaxShift:     2,
+		WindowSizeEE: 3,
+		DeltaEE: 10.0,
 		Dominance:    0,
 	}
 
