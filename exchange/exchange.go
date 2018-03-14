@@ -21,6 +21,7 @@ type AuctionParameters struct {
 	BidAskRatio float64 `json:"BidAskRatio"`
 	// k coefficient in k pricing rule pF = k *pB + (1-k)pA
 	KPricing float64 `json:"KPricing"`
+	// NOTE: For now use EE instead of MinIncrement
 	// The minimum increment in the next bid
 	// If it is 0 it means there is no shout/spread improvement
 	// This is to implement some sort of NYSE shout improvement

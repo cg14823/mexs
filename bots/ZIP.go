@@ -423,6 +423,8 @@ func (t *ZIPTrader) LogOrder(fileName string, d, ts, tradeID int, tPrice float64
 }
 
 func (t *ZIPTrader) LogMargin(d, ts int, eid string) {
+	// NOTE: stop during GA test to speed up process
+	return
 	// For now assume agents have only one order at a time
 	fileName, err := filepath.Abs("../mexs/logs/" + eid + "/ZIPMargin.csv")
 	if err != nil {

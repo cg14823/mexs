@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 import json
 
-def ibmTest(rootP, root1):
-    efficencys = np.zeros((5, 100))
-    numtrades = np.zeros((5, 100))
-    avgTps = np.zeros((5, 100))
-    alphas = np.zeros((5, 100))
+def ibmTest(rootP, root1, its=100, days=5):
+    efficencys = np.zeros((days, its))
+    numtrades = np.zeros((days, its))
+    avgTps = np.zeros((days, its))
+    alphas = np.zeros((days, its))
 
     # FIXME: hardocded max surplus and equilibirum price and max num of trades
     DMaxSurplus = 114
@@ -18,14 +18,14 @@ def ibmTest(rootP, root1):
 
     # FIXME: Hardcoded number of test
 
-    for i in range(100):
+    for i in range(its):
         fTrades = '{}{}/TRADES.csv'.format(rootP, i)
         fOrders = '{}{}/ExecOrders.csv'.format(rootP, i) 
         trades = pd.read_csv(filepath_or_buffer=fTrades)
         orders = pd.read_csv(filepath_or_buffer=fOrders)
 
         # FIXME: Hardcoded number of days
-        for d in range(5):
+        for d in range(days):
             tradesDi = trades.loc[(trades['TradingDay'] == d)]
             # get number of trades in day d
             numtrades[d, i] = len(tradesDi.index) / tmax
@@ -50,7 +50,8 @@ def ibmTest(rootP, root1):
                 summ += (x['Price'] -execOrderA.iloc[0]['LimitPrice']) +   (execOrderB.iloc[0]['LimitPrice'] - x['Price'])
                 
             efficencys[d, i] = (summ / maxSurplus)
-
+            
+    # FIXME: should created via a for loop and not hardcode 5 entries as not always 5 days
     meanEffs = [np.nanmean(efficencys[0,:]), np.nanmean(efficencys[1,:]), np.nanmean(efficencys[2,:]), np.nanmean(efficencys[3,:]), np.nanmean(efficencys[4,:]) ]
     meanNumTrades = [numtrades[0,:].mean(), numtrades[1,:].mean(), numtrades[2,:].mean(), numtrades[3,:].mean(), numtrades[4,:].mean() ]
     meanalphas = [np.nanmean(alphas[0,:]), np.nanmean(alphas[1,:]), np.nanmean(alphas[2,:]), np.nanmean(alphas[3,:]), np.nanmean(alphas[4,:]) ]
