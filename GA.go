@@ -81,7 +81,7 @@ func (g *GA) Start() {
 	cs := make([]exchange.AuctionParameters, g.N)
 	for i := 0; i < g.N; i++ {
 
-		cs[i] = InitializeChromozones("LOW")
+		cs[i] = InitializeChromozones("HIGH")
 	}
 	g.currentGenes = cs
 
@@ -98,7 +98,13 @@ func (g *GA) Start() {
 		g.MakeGen(g.currentGenes, strconv.Itoa(i))
 		scores := g.FitnessFunction("ALOC-EFF", strconv.Itoa(i))
 		g.chromozonesToCSV(i, g.currentGenes, scores)
+		best, score, index := g.elitism(false, scores)
+		log.WithFields(log.Fields{
+			"gens": best,
+		}).Debug("Best Individual score: ", score)
 		g.createNewGen(scores)
+		// This passes the best individual unchanged from one generation to the next
+		g.currentGenes[index] = best
 	}
 
 }
@@ -150,8 +156,8 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 	// Dominance mutation is in range of [-1, 1] with limit [0, 10]
 	dom = mutateInt(mom.Dominance, dad.Dominance, 2,-1, 50, 0,10)
 
-	// BidAsk ratio mutation always mom gene  range [ -0.05, 0.05] with limit [0.2, 5]
-	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0,3, 5)
+	// BidAsk ratio mutation always mom gene  range [ -0.5, 0.5] with limit [0.2, 5]
+	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0,3, 4)
 	return exchange.AuctionParameters{
 		BidAskRatio:  bar,
 		KPricing:     kp,
@@ -528,11 +534,11 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 		}
 	case "HIGH":
 		return exchange.AuctionParameters{
-			BidAskRatio:  10,
+			BidAskRatio:  5,
 			KPricing:     1,
 			MinIncrement: 10,
 			MaxShift:     100,
-			WindowSizeEE: 5,
+			WindowSizeEE: 10,
 			DeltaEE: 20.0,
 			Dominance:    10,
 			OrderQueuing: 1,
@@ -592,6 +598,33 @@ func calculateEQ(sps, bps []float64) (float64, int, error){
 	 return -1.0, -1.0, errors.New("No intersection")
 }
 
+
+// Function is used to have elitism in the GA
+// This is the practice by which the best individual of each
+// generation is past un altered to the next gen
+func (g *GA) elitism(low bool, scores []float64) (exchange.AuctionParameters, float64, int) {
+	// low == True means that low scores are better
+	bestScore := scores[0]
+	bix := 0
+	if low {
+		for i := 1; i < len(scores); i ++ {
+			if scores[i] < bestScore {
+				bix = i
+				bestScore = scores[i]
+			}
+		}
+	} else {
+		for i := 1; i < len(scores); i ++ {
+			if scores[i] > bestScore {
+				bestScore = scores[i]
+				bix = i
+			}
+		}
+	}
+
+	return g.currentGenes[bix], bestScore, bix
+}
+
 // Calculate max surplus fro sellers and buyers given the equilibrium price pe
 func calculateMaxSurplus(sps, bps []float64, pe float64) (float64, float64) {
 	sMaxSurplus := 0.0
@@ -610,4 +643,9 @@ func calculateMaxSurplus(sps, bps []float64, pe float64) (float64, float64) {
 	}
 
 	return sMaxSurplus, bMaxSurplus
+}
+
+func logElite(elite exchange.AuctionParameters, score float64, ix int) {
+	// TODO: Save the elite of each generation to CSV file for later study
+	// of the evolution of the elites thought the evolution process
 }
