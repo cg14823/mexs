@@ -408,7 +408,7 @@ func (t *ZIPTrader) LogOrder(fileName string, d, ts, tradeID int, tPrice float64
 	defer writer.Flush()
 
 	if addHeader {
-		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "LimitPrice", "TPrice", "OType"})
+		writer.Write([]string{"Day", "TimeStep", "TID", "TradeID", "LimitPrice", "TPrice", "OType", "Algo"})
 	}
 
 	writer.Write([]string{
@@ -419,6 +419,7 @@ func (t *ZIPTrader) LogOrder(fileName string, d, ts, tradeID int, tPrice float64
 		fmt.Sprintf("%.5f", t.Info.ExecutionOrders[0].LimitPrice),
 		fmt.Sprintf("%.5f", tPrice),
 		t.Info.ExecutionOrders[0].Type,
+		"ZIP",
 	})
 }
 

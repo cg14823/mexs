@@ -60,6 +60,8 @@ type GA struct {
 	EquilibriumQuantity float64
 }
 
+// TODO: change mutation rate
+
 func (g *GA) Start() {
 	log.WithFields(log.Fields{
 		"EID":         g.Config.EID,

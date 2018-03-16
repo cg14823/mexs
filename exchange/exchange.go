@@ -517,7 +517,6 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 	}
 
 	for d := 0; d < ex.Info.TradingDays; d++ {
-		// NOTE: clear orderbook at start of each day
 		ex.orderBook.Reset()
 		ex.ResetBidAskCount()
 		log.Info("Trading day:", d)
@@ -555,10 +554,8 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 			"Bids":   ex.bids,
 			"Asks":   ex.asks,
 		}).Info("Trading day ended")
-		// TODO: store order books in database at the end of each day
 		ex.orderBook.TradesToCSV(experimentID, d)
 	}
-	// TODO: Persistent save of data
 	log.WithFields(log.Fields{
 		"Trades":         ex.trades,
 		"remaining Bids": len(ex.orderBook.bidBook.Orders),

@@ -278,7 +278,19 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 			traders[zip.Info.TraderID] = zip
 			ids[i] = zip.Info.TraderID
 		}
-	} else {
+	} else if traderAlgo == "AA" {
+		for i := 0; i < n; i++ {
+			t := &bots.AATrader{}
+			t.InitRobotCore(i+idStart, tType, info)
+			t.AddOrder(&bots.TraderOrder{
+				LimitPrice: limitPrices[i],
+				Quantity:   1,
+				Type:       orderType,
+			})
+			traders[t.Info.TraderID] = t
+			ids[i] = t.Info.TraderID
+		}
+	}else {
 		log.Panic("Invalid algo type:", traderAlgo)
 	}
 
@@ -335,6 +347,15 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 				Type:       "ASK",
 			})
 			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.AATrader{}
+			aa.InitRobotCore(id, "SELLER", configFile.Info)
+			aa.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Sps[i],
+				Quantity:   1,
+				Type:       "ASK",
+			})
+			traders[aa.Info.TraderID] = aa
 		default:
 			// FIXME: If incorrect type default to ZIP for now
 			zipT := &bots.ZIPTrader{}
@@ -368,6 +389,15 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 				Type:       "BID",
 			})
 			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.ZICTrader{}
+			aa.InitRobotCore(id, "BUYER", configFile.Info)
+			aa.AddOrder(&bots.TraderOrder{
+				LimitPrice: configFile.Bps[i],
+				Quantity:   1,
+				Type:       "BID",
+			})
+			traders[aa.Info.TraderID] = aa
 		default:
 			// FIXME: If incorrect type default to ZIP for now
 			zipT := &bots.ZIPTrader{}
@@ -413,8 +443,6 @@ func experiment(c *cli.Context) {
 	supplyAndDemandToCSV(eConfig.Sps, eConfig.Bps, eConfig.EID, "0")
 }
 
-// TODO: create a cli interfaces to setup experiment with out having to go
-// through the code
 // TODO: create tools to automatically create limit prices, orders and
 // instantiate traders
 // TODO: create a tool for schedule generation
