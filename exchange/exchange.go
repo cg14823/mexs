@@ -61,17 +61,17 @@ type TID2RTO struct {
 *   -
  */
 type Exchange struct {
-	EID        string
-	GAVector   AuctionParameters
-	Info       common.MarketInfo
-	orderBook  OrderBook
-	agents     map[int]bots.RobotTrader
-	AgentNum   int
-	SellersIDs []int
-	BuyersIDs  []int
-	bids       int
-	asks       int
-	trades     int
+	EID              string
+	GAVector         AuctionParameters
+	Info             common.MarketInfo
+	orderBook        OrderBook
+	agents           map[int]bots.RobotTrader
+	AgentNum         int
+	SellersIDs       []int
+	BuyersIDs        []int
+	bids             int
+	asks             int
+	trades           int
 	tradeRecordPrice []float64
 }
 
@@ -144,7 +144,7 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 	}
 
 	// add trade price to trade record to use with EE shout improvement rule
-	ex.tradeRecordPrice[ex.trades % ex.GAVector.WindowSizeEE] = trade.Price
+	ex.tradeRecordPrice[ex.trades%ex.GAVector.WindowSizeEE] = trade.Price
 	ex.trades++
 
 	ex.agents[bid.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
@@ -398,7 +398,7 @@ func (ex *Exchange) DominanceRule(order *common.Order, t int) bool {
 	return true
 }
 
-func (ex *Exchange) EEShoutImprovement (order *common.Order) bool {
+func (ex *Exchange) EEShoutImprovement(order *common.Order) bool {
 	// This rule https://www.researchgate.net/publication/221455475_Reducing_price_fluctuation_in_continuous_double_auctions_through_pricing_policy_and_shout_improvement
 	// The rule keeps an estimate of the equilibrium price using an estimate of the equilibrium price Pe
 	// Pe = (1/m) * sum_0_m(Pi)
@@ -413,14 +413,14 @@ func (ex *Exchange) EEShoutImprovement (order *common.Order) bool {
 
 	pe := 1.0 / float64(ex.GAVector.WindowSizeEE)
 	sum := 0.0
-	for i:=0; i < ex.GAVector.WindowSizeEE; i++ {
+	for i := 0; i < ex.GAVector.WindowSizeEE; i++ {
 		sum += ex.tradeRecordPrice[i]
 	}
 	pe = pe * sum
 
-	if order.OrderType == "BID" && order.Price >= (pe - ex.GAVector.DeltaEE) {
+	if order.OrderType == "BID" && order.Price >= (pe-ex.GAVector.DeltaEE) {
 		return true
-	} else if order.OrderType == "ASK" && order.Price <= (pe + ex.GAVector.DeltaEE) {
+	} else if order.OrderType == "ASK" && order.Price <= (pe+ex.GAVector.DeltaEE) {
 		return true
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"math"
@@ -9,9 +10,8 @@ import (
 	"mexs/exchange"
 	"os"
 	"path/filepath"
-	"strconv"
-	"errors"
 	"sort"
+	"strconv"
 )
 
 type tradesCSV struct {
@@ -62,9 +62,9 @@ type GA struct {
 
 func (g *GA) Start() {
 	log.WithFields(log.Fields{
-		"EID": g.Config.EID,
+		"EID":         g.Config.EID,
 		"Individuals": g.N,
-		"Gens": g.Gens,
+		"Gens":        g.Gens,
 	}).Warn("STARTING GA")
 	// This function will be the heart of the GA
 	// Number of individuals in each generation
@@ -94,14 +94,19 @@ func (g *GA) Start() {
 				"Error": err.Error(),
 			}).Error("Log Folder for this generation could not be made")
 		}
-
+		// Runs the current generation of markets
 		g.MakeGen(g.currentGenes, strconv.Itoa(i))
+		// Calculate score of each individual in the generation
 		scores := g.FitnessFunction("ALOC-EFF", strconv.Itoa(i))
+		// Store the score of each individual in the generation
 		g.chromozonesToCSV(i, g.currentGenes, scores)
+		// Find best individual
 		best, score, index := g.elitism(false, scores)
+		g.logElite(best, score, index, strconv.Itoa(i))
 		log.WithFields(log.Fields{
 			"gens": best,
 		}).Debug("Best Individual score: ", score)
+		// Create new generation based on the scores of the previous one
 		g.createNewGen(scores)
 		// This passes the best individual unchanged from one generation to the next
 		g.currentGenes[index] = best
@@ -139,10 +144,10 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 	var maxS float64
 	var dom int
 	// KPricing mutation is in range of [-0.05, 0.05] with limits [0,1]
-	kp = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50,3, 5 )
+	kp = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 5)
 
 	// MinIncrement mutation is in range of [-0.5, 05] with limit [0, 20]
-	minI = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50,3, 4 )
+	minI = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 4)
 
 	// WindowSizeEE mutation is in range of [-1, +1] with limit [1, 20]
 	win = mutateInt(mom.WindowSizeEE, dad.WindowSizeEE, 2, -1, 50, 1, 20)
@@ -151,24 +156,25 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 	delta = mutateFloat(mom.DeltaEE, dad.DeltaEE, 0.0, 100.0, 1, -1, 50, 3, 3)
 
 	// MaxShift mutation is in range of [-0.01, 0.01] with limit [0.05, 10]
-	maxS = mutateFloat(mom.MaxShift, dad.MaxShift, 0.05, 10, 1,-1,50, 3,5)
+	maxS = mutateFloat(mom.MaxShift, dad.MaxShift, 0.05, 10, 1, -1, 50, 3, 5)
 
 	// Dominance mutation is in range of [-1, 1] with limit [0, 10]
-	dom = mutateInt(mom.Dominance, dad.Dominance, 2,-1, 50, 0,10)
+	dom = mutateInt(mom.Dominance, dad.Dominance, 2, -1, 50, 0, 10)
 
 	// BidAsk ratio mutation always mom gene  range [ -0.5, 0.5] with limit [0.2, 5]
-	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0,3, 4)
+	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0, 3, 4)
 	return exchange.AuctionParameters{
 		BidAskRatio:  bar,
 		KPricing:     kp,
 		MinIncrement: minI,
 		WindowSizeEE: win,
-		DeltaEE: delta,
+		DeltaEE:      delta,
 		MaxShift:     maxS,
 		Dominance:    dom,
 		OrderQueuing: 1,
 	}
 }
+
 // @param mom - mothers gene
 // @param dad - dads gene
 // @param max - max mutation value
@@ -177,7 +183,7 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 // @param ubound - upper bound in gene value
 // @param lbound - lower bound in gene value
 func mutateInt(mom, dad, max, min, prob, lbound, ubound int) int {
-	mutation := rand.Intn(max - min) + min
+	mutation := rand.Intn(max-min) + min
 	v := dad + mutation
 	if val := rand.Intn(100); val < prob {
 		v = mom + mutation
@@ -185,7 +191,7 @@ func mutateInt(mom, dad, max, min, prob, lbound, ubound int) int {
 
 	if v < lbound {
 		return lbound
-	} else if  v > ubound{
+	} else if v > ubound {
 		return ubound
 	}
 	return v
@@ -198,19 +204,19 @@ func mutateInt(mom, dad, max, min, prob, lbound, ubound int) int {
 // @param prob - probability of choosing mom ( [0, 100]
 // To create random mutations up to x decimals we multiply mav values and min values by
 // 10 * decimals and then use (rand.Int((max - min) * 10 ** d1) -min *10**d1) / (10 *d2)
-func mutateFloat(mom, dad, lbound, ubound  float64, max, min, prob, d1, d2 int) float64 {
+func mutateFloat(mom, dad, lbound, ubound float64, max, min, prob, d1, d2 int) float64 {
 	nMax := max * int(math.Pow(10.0, float64(d1)))
 	nMin := min * int(math.Pow(10.0, float64(d1)))
-	randN := float64(rand.Intn(nMax - nMin) + nMin)
-	mutation :=  randN / math.Pow(10.0, float64(d2))
-	v := dad +  mutation
+	randN := float64(rand.Intn(nMax-nMin) + nMin)
+	mutation := randN / math.Pow(10.0, float64(d2))
+	v := dad + mutation
 	if val := rand.Intn(100); val < prob {
 		v = mom + mutation
 	}
 
 	if v < lbound {
 		return lbound
-	} else if  v > ubound{
+	} else if v > ubound {
 		return ubound
 	}
 	return v
@@ -244,14 +250,14 @@ func (g *GA) FitnessFunction(fnName string, gen string) []float64 {
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error": err.Error(),
-				"pe": pe,
+				"pe":    pe,
 			}).Panic("Failed to calculates EQ in fitness function")
 		}
 		sS, bS := calculateMaxSurplus(g.Config.Sps, g.Config.Bps, pe)
-		surplusDays := (sS +bS) * float64(g.Config.MarketInfo.TradingDays)
+		surplusDays := (sS + bS) * float64(g.Config.MarketInfo.TradingDays)
 		log.WithFields(log.Fields{
 			"surplusDays": surplusDays,
-			"Pe": pe,
+			"Pe":          pe,
 		}).Info("Efficency data")
 		trades := g.getLimitPrices(fmt.Sprintf("../mexs/logs/%s/GEN_%s/", g.Config.EID, gen))
 		return g.allEffs(trades, surplusDays)
@@ -298,9 +304,10 @@ func (g *GA) allEffs(trades map[int][]tradeLPs, maxSurplus float64) []float64 {
 	}
 	return scores
 }
+
 // maxSurplus should be the max surplus after all the trading days and not per dat
 func (g *GA) efficiency(trades []tradeLPs, maxSurplus float64) float64 {
-	if len(trades) == 0{
+	if len(trades) == 0 {
 		return 0.0
 	}
 	sum := 0.0
@@ -398,8 +405,8 @@ func (g *GA) getLimitPrices(folderPath string) map[int][]tradeLPs {
 			}
 
 			if _, ok := tlps[day]; ok {
-				if val, ok := tlps[day][tid]; ok{
-					if otype == "BID"{
+				if val, ok := tlps[day][tid]; ok {
+					if otype == "BID" {
 						val.Blp = lp
 						tlps[day][tid] = val
 					} else {
@@ -407,40 +414,40 @@ func (g *GA) getLimitPrices(folderPath string) map[int][]tradeLPs {
 						tlps[day][tid] = val
 					}
 				} else {
-					if otype == "BID"{
+					if otype == "BID" {
 						tlps[day][tid] = tradeLPs{
 							TID: tid,
-							TS: ts,
-							TD: day,
-							TP: tp,
+							TS:  ts,
+							TD:  day,
+							TP:  tp,
 							Blp: lp,
 						}
 					} else {
 						tlps[day][tid] = tradeLPs{
 							TID: tid,
-							TS: ts,
-							TD: day,
-							TP: tp,
+							TS:  ts,
+							TD:  day,
+							TP:  tp,
 							Slp: lp,
 						}
 					}
 				}
 			} else {
 				tlps[day] = make(map[int]tradeLPs)
-				if otype == "BID"{
+				if otype == "BID" {
 					tlps[day][tid] = tradeLPs{
 						TID: tid,
-						TS: ts,
-						TD: day,
-						TP: tp,
+						TS:  ts,
+						TD:  day,
+						TP:  tp,
 						Blp: lp,
 					}
 				} else {
 					tlps[day][tid] = tradeLPs{
 						TID: tid,
-						TS: ts,
-						TD: day,
-						TP: tp,
+						TS:  ts,
+						TD:  day,
+						TP:  tp,
 						Slp: lp,
 					}
 				}
@@ -517,7 +524,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			MinIncrement: 0,
 			MaxShift:     0.1,
 			WindowSizeEE: 1,
-			DeltaEE: 0.0,
+			DeltaEE:      0.0,
 			Dominance:    0,
 			OrderQueuing: 1,
 		}
@@ -528,7 +535,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			MinIncrement: 1,
 			MaxShift:     2,
 			WindowSizeEE: 3,
-			DeltaEE: 5.0,
+			DeltaEE:      5.0,
 			Dominance:    0,
 			OrderQueuing: 1,
 		}
@@ -539,7 +546,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			MinIncrement: 10,
 			MaxShift:     100,
 			WindowSizeEE: 10,
-			DeltaEE: 20.0,
+			DeltaEE:      20.0,
 			Dominance:    10,
 			OrderQueuing: 1,
 		}
@@ -556,7 +563,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			MinIncrement: float64(rand.Intn(5)),
 			MaxShift:     rand.Float64() + 0.5,
 			WindowSizeEE: rand.Intn(5-1) + 1,
-			DeltaEE: 2 + 10 * rand.Float64(),
+			DeltaEE:      2 + 10*rand.Float64(),
 			Dominance:    rand.Intn(5),
 			OrderQueuing: 1,
 		}
@@ -568,7 +575,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			MinIncrement: float64(rand.Intn(5)),
 			MaxShift:     rand.Float64() + 0.5,
 			WindowSizeEE: rand.Intn(5-1) + 1,
-			DeltaEE: 2 + 10 * rand.Float64(),
+			DeltaEE:      2 + 10*rand.Float64(),
 			Dominance:    rand.Intn(5),
 			OrderQueuing: 1,
 		}
@@ -578,26 +585,25 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 // calculates equilibrium price and equilibrium quantity
 // the maximal theoretical number of trades is equal to the equilibrium quantity floored
 // as no fractiontrade can be made
-func calculateEQ(sps, bps []float64) (float64, int, error){
+func calculateEQ(sps, bps []float64) (float64, int, error) {
 	sort.Float64s(sps)
 	sort.Sort(sort.Reverse(sort.Float64Slice(bps)))
 	//log.Warn("Sps: ",sps)
 	//log.Warn("Bps: ", bps)
-	 for ix, value := range sps {
-	 	if len(bps) <= ix +1 {
-	 		break
+	for ix, value := range sps {
+		if len(bps) <= ix+1 {
+			break
 		}
 
-		if bps[ix]  == value {
+		if bps[ix] == value {
 			return value, ix, nil
-		} else if  bps[ix] < value {
+		} else if bps[ix] < value {
 			return (bps[ix] + value) / 2.0, ix, nil
 		}
-	 }
+	}
 
-	 return -1.0, -1.0, errors.New("No intersection")
+	return -1.0, -1.0, errors.New("No intersection")
 }
-
 
 // Function is used to have elitism in the GA
 // This is the practice by which the best individual of each
@@ -607,14 +613,14 @@ func (g *GA) elitism(low bool, scores []float64) (exchange.AuctionParameters, fl
 	bestScore := scores[0]
 	bix := 0
 	if low {
-		for i := 1; i < len(scores); i ++ {
+		for i := 1; i < len(scores); i++ {
 			if scores[i] < bestScore {
 				bix = i
 				bestScore = scores[i]
 			}
 		}
 	} else {
-		for i := 1; i < len(scores); i ++ {
+		for i := 1; i < len(scores); i++ {
 			if scores[i] > bestScore {
 				bestScore = scores[i]
 				bix = i
@@ -645,7 +651,53 @@ func calculateMaxSurplus(sps, bps []float64, pe float64) (float64, float64) {
 	return sMaxSurplus, bMaxSurplus
 }
 
-func logElite(elite exchange.AuctionParameters, score float64, ix int) {
+func (g *GA) logElite(elite exchange.AuctionParameters, score float64, ix int, gen string) {
 	// TODO: Save the elite of each generation to CSV file for later study
 	// of the evolution of the elites thought the evolution process
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/elite.csv", g.Config.EID))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"experimentID": g.Config.EID,
+			"error":        err.Error(),
+		}).Error("File Path not found")
+		return
+	}
+	addHeader := true
+	if _, err := os.Stat(fileName); err == nil {
+		addHeader = false
+	}
+
+	f, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer f.Close()
+
+	writer := csv.NewWriter(f)
+	defer writer.Flush()
+
+	if addHeader {
+		writer.Write([]string{
+			"Gen",
+			"Score",
+			"ID",
+			"B:A",
+			"K",
+			"MinIncrement",
+			"WindowSizeEE",
+			"DeltaEE",
+			"MaxShift",
+			"Dominance",
+		})
+	}
+	writer.Write([]string{
+		gen,
+		fmt.Sprintf("%.4f", score),
+		strconv.Itoa(ix),
+		fmt.Sprintf("%.5f", elite.BidAskRatio),
+		fmt.Sprintf("%.5f", elite.KPricing),
+		fmt.Sprintf("%.5f", elite.MinIncrement),
+		strconv.Itoa(elite.WindowSizeEE),
+		fmt.Sprintf("%.5f", elite.DeltaEE),
+		fmt.Sprintf("%.5f", elite.MaxShift),
+		strconv.Itoa(elite.Dominance),
+	})
+
 }

@@ -57,8 +57,8 @@ func (t *ZIPTrader) InitRobotCore(id int, sellerOrBuyer string, marketInfo commo
 	t.momentum = 0.2 + rand.Float64()*0.6
 	t.ca = 0.05 // t.ca & .cr were hard-coded in '97 but parameterised later
 	t.cr = 0.05
-	t.marginBuy = -(0.05 + 0.3 * rand.Float64())
-	t.marginSell = 0.05 + 0.3 * rand.Float64()
+	t.marginBuy = -(0.05 + 0.3*rand.Float64())
+	t.marginSell = 0.05 + 0.3*rand.Float64()
 	t.margin = 0.0
 	//t.marginBuy = 0.0
 	//t.marginSell = 0.0

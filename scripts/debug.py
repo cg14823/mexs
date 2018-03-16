@@ -23,4 +23,4 @@ def visualize_profit_margin(eid):
 
     plt.show()
 
-visualize_profit_margin('margin0')
+visualize_profit_margin('IBMTest/runs__0')

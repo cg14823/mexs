@@ -139,6 +139,12 @@ func main() {
 			Action: itRun,
 			Flags:  app.Flags,
 		},
+		cli.Command{
+			Name:   "ItGA",
+			Usage:  "Runs GA experiment 100 times",
+			Action: itGA,
+			Flags:  app.Flags,
+		},
 	}
 
 	app.Name = "Minimal Exchange Simulator"
@@ -216,7 +222,7 @@ func checkFlags(c *cli.Context) ExperimentConfig {
 		MinIncrement: 1,
 		MaxShift:     2,
 		WindowSizeEE: 3,
-		DeltaEE: 10.0,
+		DeltaEE:      10.0,
 		Dominance:    0,
 	}
 
@@ -598,5 +604,23 @@ func itRun(c *cli.Context) {
 		ex.SetTraders(config.Agents)
 		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule)
 		supplyAndDemandToCSV(config.Sps, config.Bps, config.EID+"_"+strconv.Itoa(i), "0")
+	}
+}
+
+func itGA(c *cli.Context) {
+	runs := 100
+	for i:= 0; i < runs; i++ {
+		log.Warn("Run: ", i)
+		config := checkFlags(c)
+		config.EID = config.EID +"/run_"+strconv.Itoa(i)
+		ga := &GA{
+			N:                   config.Individuals,
+			Gens:                config.Gens,
+			Config:              config,
+			CurrentGen:          0,
+			EquilibriumQuantity: config.EQ,
+			EquilibriumPrice:    config.EP,
+		}
+		ga.Start()
 	}
 }

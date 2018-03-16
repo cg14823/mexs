@@ -4,6 +4,53 @@ import pandas as pd
 import sys
 import glob
 
+def plot_elite_score(eid):
+    f = '../logs/{}/elite.csv'.format(eid)
+    elites = pd.read_csv(filepath_or_buffer=f)
+
+    figE = plt.figure("Elites score")
+    ax = figE.add_subplot(111)
+
+    ax.set_ylabel('Score')
+    ax.set_xlabel('Gen')
+
+    ax.plot(elites['Gen'], elites['Score'])
+    ax.grid()
+
+
+def plot_gen_scores(eid):
+    f = '../logs/{}/chromozones.csv'.format(eid)
+    f1 = '../logs/{}/elite.csv'.format(eid)
+    elites = pd.read_csv(filepath_or_buffer=f)
+    cs = pd.read_csv(filepath_or_buffer=f)
+
+    figAv = plt.figure('Score evolution')
+    ax = figAv.add_subplot(111)
+
+    ax.set_ylabel('Score')
+    ax.set_xlabel('Generation')
+
+    ax.plot(elites['Gen'], elites['Score'], color='k', label='Best score')
+    ax.grid()
+
+    maxGen = cs['Gen'].max() + 1
+    averageScores = []
+    stdScores = []
+    ubound = []
+    lbound = []
+    gen = list(range(maxGen))
+    for g in range(maxGen):
+        gen = cs.loc[(cs['Gen'] == g)]
+        averageScores.append(gen['Score'].mean())
+        stdScores.append(gen['Score'].std())
+        ubound.append(averageScores[-1] + stdScores[-1])
+        lbound.append(averageScores[-1] - stdScores[-1])
+
+    ax.plot(gen, averageScores, color='r', label='Average Score')
+    ax.plot(gen, ubound, color='g', label='1 standard deviation')
+    ax.plot(gen, lbound, color='g')
+
+
 def trades(eid, ep=None):
     f = '../logs/{}/TRADES.csv'.format(eid)
 
@@ -11,7 +58,6 @@ def trades(eid, ep=None):
     maxDay = trades['TradingDay'].max()
     for d in range(maxDay + 1):
         ts = trades.loc[(trades['TradingDay'] == d)]
-
 
         figT = plt.figure("Trade Prices day {} / {}:".format(d, maxDay))
         ax = figT.add_subplot(111)
@@ -119,10 +165,14 @@ def main():
             trades(eid)
         elif action == "sd":
             supplyDemand(eid)
-        else:
+        elif action == "sdt":
             pricesTimes = supplyDemand(eid)
             trades(eid, pricesTimes)
-        
+        elif action == "gen-score":
+            plot_gen_scores(eid)
+        else:
+            print("Commands [sd, sdt, gen-score]")
+            return
         plt.show()
 
 if __name__ == "__main__":
