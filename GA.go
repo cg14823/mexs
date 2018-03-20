@@ -58,6 +58,8 @@ type GA struct {
 	// Some way of mapping equilibrium price over time is needed
 	EquilibriumPrice    float64
 	EquilibriumQuantity float64
+	// Range // [0, 1]
+	MutationRate float64
 }
 
 // TODO: change mutation rate
@@ -184,8 +186,11 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 // @param prob - probability of choosing mom ( [0, 100]
 // @param ubound - upper bound in gene value
 // @param lbound - lower bound in gene value
-func mutateInt(mom, dad, max, min, prob, lbound, ubound int) int {
-	mutation := rand.Intn(max-min) + min
+func mutateInt(mom, dad, max, min, prob, lbound, ubound int, mRate float64) int {
+	mutation := 0
+	if mRate > rand.Float64() {
+		mutation = rand.Intn(max-min) + min
+	}
 	v := dad + mutation
 	if val := rand.Intn(100); val < prob {
 		v = mom + mutation
@@ -206,11 +211,15 @@ func mutateInt(mom, dad, max, min, prob, lbound, ubound int) int {
 // @param prob - probability of choosing mom ( [0, 100]
 // To create random mutations up to x decimals we multiply mav values and min values by
 // 10 * decimals and then use (rand.Int((max - min) * 10 ** d1) -min *10**d1) / (10 *d2)
-func mutateFloat(mom, dad, lbound, ubound float64, max, min, prob, d1, d2 int) float64 {
-	nMax := max * int(math.Pow(10.0, float64(d1)))
-	nMin := min * int(math.Pow(10.0, float64(d1)))
-	randN := float64(rand.Intn(nMax-nMin) + nMin)
-	mutation := randN / math.Pow(10.0, float64(d2))
+func mutateFloat(mom, dad, lbound, ubound float64, max, min, prob, d1, d2 int, mRate float64) float64 {
+	mutation := 0.0
+	if mRate > rand.Float64() {
+		nMax := max * int(math.Pow(10.0, float64(d1)))
+		nMin := min * int(math.Pow(10.0, float64(d1)))
+		randN := float64(rand.Intn(nMax-nMin) + nMin)
+		mutation = randN / math.Pow(10.0, float64(d2))
+	}
+	
 	v := dad + mutation
 	if val := rand.Intn(100); val < prob {
 		v = mom + mutation

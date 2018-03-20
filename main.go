@@ -390,7 +390,7 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 			})
 			traders[zic.Info.TraderID] = zic
 		case "AA":
-			aa := &bots.ZICTrader{}
+			aa := &bots.AATrader{}
 			aa.InitRobotCore(id, "BUYER", configFile.Info)
 			aa.AddOrder(&bots.TraderOrder{
 				LimitPrice: configFile.Bps[i],
@@ -617,6 +617,7 @@ func startGA(c *cli.Context) {
 		CurrentGen:          0,
 		EquilibriumQuantity: config.EQ,
 		EquilibriumPrice:    config.EP,
+		MutationRate: 0.1,
 	}
 
 	ga.Start()
@@ -648,6 +649,7 @@ func itGA(c *cli.Context) {
 			CurrentGen:          0,
 			EquilibriumQuantity: config.EQ,
 			EquilibriumPrice:    config.EP,
+			MutationRate: 0.1,
 		}
 		ga.Start()
 	}
