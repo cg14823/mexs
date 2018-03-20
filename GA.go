@@ -148,25 +148,25 @@ func (g *GA) getChildGenes(scores []float64) exchange.AuctionParameters {
 	var maxS float64
 	var dom int
 	// KPricing mutation is in range of [-0.05, 0.05] with limits [0,1]
-	kp = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 5)
+	kp = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 5, g.MutationRate)
 
 	// MinIncrement mutation is in range of [-0.5, 05] with limit [0, 20]
-	minI = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 4)
+	minI = mutateFloat(mom.KPricing, dad.KPricing, 0.0, 1.0, 5, -5, 50, 3, 4, g.MutationRate)
 
 	// WindowSizeEE mutation is in range of [-1, +1] with limit [1, 20]
-	win = mutateInt(mom.WindowSizeEE, dad.WindowSizeEE, 2, -1, 50, 1, 20)
+	win = mutateInt(mom.WindowSizeEE, dad.WindowSizeEE, 2, -1, 50, 1, 20, g.MutationRate)
 
 	// DeltaEE mutation is in range of [-1.0, +1] with limit [0, 100]
-	delta = mutateFloat(mom.DeltaEE, dad.DeltaEE, 0.0, 100.0, 1, -1, 50, 3, 3)
+	delta = mutateFloat(mom.DeltaEE, dad.DeltaEE, 0.0, 100.0, 1, -1, 50, 3, 3, g.MutationRate)
 
 	// MaxShift mutation is in range of [-0.01, 0.01] with limit [0.05, 10]
-	maxS = mutateFloat(mom.MaxShift, dad.MaxShift, 0.05, 10, 1, -1, 50, 3, 5)
+	maxS = mutateFloat(mom.MaxShift, dad.MaxShift, 0.05, 10, 1, -1, 50, 3, 5, g.MutationRate)
 
 	// Dominance mutation is in range of [-1, 1] with limit [0, 10]
-	dom = mutateInt(mom.Dominance, dad.Dominance, 2, -1, 50, 0, 10)
+	dom = mutateInt(mom.Dominance, dad.Dominance, 2, -1, 50, 0, 10, g.MutationRate)
 
 	// BidAsk ratio mutation always mom gene  range [ -0.5, 0.5] with limit [0.2, 5]
-	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0, 3, 4)
+	bar := mutateFloat(mom.BidAskRatio, mom.BidAskRatio, 0.2, 5.0, 5, -5, 0, 3, 4, g.MutationRate)
 	return exchange.AuctionParameters{
 		BidAskRatio:  bar,
 		KPricing:     kp,
@@ -219,7 +219,7 @@ func mutateFloat(mom, dad, lbound, ubound float64, max, min, prob, d1, d2 int, m
 		randN := float64(rand.Intn(nMax-nMin) + nMin)
 		mutation = randN / math.Pow(10.0, float64(d2))
 	}
-	
+
 	v := dad + mutation
 	if val := rand.Intn(100); val < prob {
 		v = mom + mutation
