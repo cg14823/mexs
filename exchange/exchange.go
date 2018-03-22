@@ -383,7 +383,7 @@ func (ex *Exchange) DominanceRule(order *common.Order, t int) bool {
 			}
 		}
 	} else if order.OrderType == "ASK" {
-		if lastO, ok := ex.orderBook.bidBook.Orders[order.TraderID]; ok {
+		if lastO, ok := ex.orderBook.askBook.Orders[order.TraderID]; ok {
 			if lastO.TimeStep+ex.GAVector.Dominance > t {
 				log.WithFields(log.Fields{
 					"Dominance":         ex.GAVector.Dominance,

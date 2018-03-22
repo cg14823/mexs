@@ -69,6 +69,8 @@ func (g *GA) Start() {
 		"EID":         g.Config.EID,
 		"Individuals": g.N,
 		"Gens":        g.Gens,
+		"Fitness FN": g.Config.FitnessFN,
+		"Chrmozone Init": g.Config.CInit,
 	}).Warn("STARTING GA")
 	// This function will be the heart of the GA
 	// Number of individuals in each generation
@@ -85,7 +87,7 @@ func (g *GA) Start() {
 	cs := make([]exchange.AuctionParameters, g.N)
 	for i := 0; i < g.N; i++ {
 
-		cs[i] = InitializeChromozones("HIGH")
+		cs[i] = InitializeChromozones(g.Config.CInit)
 	}
 	g.currentGenes = cs
 
@@ -101,7 +103,7 @@ func (g *GA) Start() {
 		// Runs the current generation of markets
 		g.MakeGen(g.currentGenes, strconv.Itoa(i))
 		// Calculate score of each individual in the generation
-		scores := g.FitnessFunction("ALOC-EFF", strconv.Itoa(i))
+		scores := g.FitnessFunction(g.Config.FitnessFN, strconv.Itoa(i))
 		// Store the score of each individual in the generation
 		g.chromozonesToCSV(i, g.currentGenes, scores)
 		// Find best individual
@@ -511,6 +513,13 @@ func (g *GA) chromozonesToCSV(gen int, cs []exchange.AuctionParameters, scores [
 		})
 	}
 
+	if len(scores) !=  len(cs) {
+		log.WithFields(log.Fields{
+			"Scores len ": len(scores),
+			"Len cs": len(cs),
+		}).Panic("Size of chromosomes array does not match score array")
+	}
+
 	for i, v := range cs {
 		writer.Write([]string{
 			strconv.Itoa(gen),
@@ -555,7 +564,7 @@ func InitializeChromozones(initType string) exchange.AuctionParameters {
 			BidAskRatio:  5,
 			KPricing:     1,
 			MinIncrement: 10,
-			MaxShift:     100,
+			MaxShift:     10,
 			WindowSizeEE: 10,
 			DeltaEE:      20.0,
 			Dominance:    10,

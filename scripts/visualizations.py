@@ -21,7 +21,7 @@ def plot_elite_score(eid):
 def plot_gen_scores(eid):
     f = '../logs/{}/chromozones.csv'.format(eid)
     f1 = '../logs/{}/elite.csv'.format(eid)
-    elites = pd.read_csv(filepath_or_buffer=f)
+    elites = pd.read_csv(filepath_or_buffer=f1)
     cs = pd.read_csv(filepath_or_buffer=f)
 
     figAv = plt.figure('Score evolution')
@@ -46,10 +46,108 @@ def plot_gen_scores(eid):
         ubound.append(averageScores[-1] + stdScores[-1])
         lbound.append(averageScores[-1] - stdScores[-1])
 
-    ax.plot(gen, averageScores, color='r', label='Average Score')
-    ax.plot(gen, ubound, color='g', label='1 standard deviation')
-    ax.plot(gen, lbound, color='g')
+    ax.plot(elites['Gen'], averageScores, color='r', label='Average Score')
+    ax.plot(elites['Gen'], ubound, color='g', label='1 standard deviation')
+    ax.plot(elites['Gen'], lbound, color='g')
+    ax.legend()
 
+def plot_avg_genes(eid):
+    f = '../logs/{}/chromozones.csv'.format(eid)
+    cs = pd.read_csv(filepath_or_buffer=f)
+
+    fig = plt.figure('Average Genes')
+
+    maxGen = cs['Gen'].max() + 1
+    gen = list(range(maxGen))
+    # Bid:ask
+    bar = []
+    bstd = []
+    # K pricing
+    kpricing =[]
+    kstd =[]
+    #Window Size EE
+    ws = []
+    wstd =[]
+    #DeltaEE
+    deltaEE = []
+    dstd = []
+    #MaxShift 
+    ms =[]
+    mstd = []
+    # Dominance
+    dominance = []
+    domstd = []
+
+    for g in range(maxGen):
+        v = cs.loc[cs['Gen'] == g]
+        bar.append(v['B:A'].mean())
+        bstd.append(v['B:A'].std())
+
+        kpricing.append(v['K'].mean())
+        kstd.append(v['K'].std())
+
+        ws.append(v['WindowSizeEE'].mean())
+        wstd.append(v['WindowSizeEE'].std())
+
+        deltaEE.append(v['DeltaEE'].mean())
+        dstd.append(v['DeltaEE'].std())
+
+        ms.append(v['MaxShift'].mean())
+        mstd.append(v['MaxShift'].std())
+
+        dominance.append(v['Dominance'].mean())
+        domstd.append(v['Dominance'].std())
+
+    axba = fig.add_subplot(231)
+    axba.plot(gen, bar, color='b', label='bid ask ratio')
+    axba.plot(gen, [a-b for a,b in zip(bar, bstd)], color='g', label='1 std')
+    axba.plot(gen, [a+b for a,b in zip(bar, bstd)], color='g')
+    axba.legend()
+    axba.grid()
+
+
+    axk = fig.add_subplot(232)
+    axk.plot(gen, kpricing, color='b', label='K-Pricing')
+    axk.plot(gen, [a-b for a,b in zip(kpricing, kstd)], color='g', label='1 std')
+    axk.plot(gen, [a+b for a,b in zip(kpricing, kstd)], color='g')
+    axk.legend()
+    axk.grid()
+
+
+    axw = fig.add_subplot(233)
+    axw.plot(gen, ws, color='b', label='Window Size')
+    axw.plot(gen, [a-b for a,b in zip(ws, wstd)], color='g', label='1 std')
+    axw.plot(gen, [a+b for a,b in zip(ws, wstd)], color='g')
+    axw.legend()
+    axw.grid()
+
+    axde = fig.add_subplot(234)
+    axde.plot(gen, deltaEE, color='b', label='Delta')
+    axde.plot(gen, [a-b for a,b in zip(deltaEE, dstd)], color='g', label='1 std')
+    axde.plot(gen, [a+b for a,b in zip(deltaEE, dstd)], color='g')
+    axde.legend()
+    axde.grid()
+
+    axm = fig.add_subplot(235)
+    axm.plot(gen, ms, color='b', label='Max Shift')
+    axm.plot(gen, [a-b for a,b in zip(ms, mstd)], color='g', label='1 std')
+    axm.plot(gen, [a+b for a,b in zip(ms, mstd)], color='g')
+    axm.legend()
+    axm.grid()
+
+    axdo = fig.add_subplot(236)
+    axdo.plot(gen,dominance, color='b', label='Dominance')
+    axdo.plot(gen, [a-b for a,b in zip(dominance, domstd)], color='g', label='1 std')
+    axdo.plot(gen, [a+b for a,b in zip(dominance, domstd)], color='g')
+    axdo.legend()
+    axdo.grid()
+
+
+    
+    
+    
+def plot_elite_genes(eid):
+    pass
 
 def trades(eid, ep=None):
     f = '../logs/{}/TRADES.csv'.format(eid)
@@ -170,6 +268,7 @@ def main():
             trades(eid, pricesTimes)
         elif action == "gen-score":
             plot_gen_scores(eid)
+            plot_avg_genes(eid)
         else:
             print("Commands [sd, sdt, gen-score]")
             return
