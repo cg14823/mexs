@@ -1,12 +1,11 @@
 package bots
 
 import (
-	"crypto/rand"
+	"math/rand"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"math/big"
 	"mexs/common"
 	"os"
 	"path/filepath"
@@ -56,11 +55,7 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 	}
 
 	if order.IsBid() {
-		bidPrice := order.LimitPrice - t.Info.MarketInfo.MinPrice
-		if bidPrice > 0 {
-			randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
-			bidPrice = float64(randPrice.Int64()) + t.Info.MarketInfo.MinPrice
-		}
+		bidPrice := float64(rand.Intn(int(order.LimitPrice + 1.0 - t.Info.MarketInfo.MinPrice))) + t.Info.MarketInfo.MinPrice
 
 		marketOrder := &common.Order{
 			TraderID:  t.Info.TraderID,
@@ -76,16 +71,12 @@ func (t *ZICTrader) GetOrder(timeStep int) *common.Order {
 		return marketOrder
 	}
 
-	bidPrice := t.Info.MarketInfo.MaxPrice - order.LimitPrice
-	if bidPrice > 0 {
-		randPrice, _ := rand.Int(rand.Reader, big.NewInt(int64(bidPrice)))
-		bidPrice = float64(randPrice.Int64()) + order.LimitPrice
-	}
+	askPrice := float64(rand.Intn(int(t.Info.MarketInfo.MaxPrice - order.LimitPrice))) + order.LimitPrice
 
 	marketOrder := &common.Order{
 		TraderID:  t.Info.TraderID,
 		OrderType: order.Type,
-		Price:     bidPrice,
+		Price:     askPrice,
 		// For now just bid for all the quantity in order, no partitioning
 		Quantity: order.Quantity,
 		TimeStep: timeStep,
@@ -110,12 +101,11 @@ func (t *ZICTrader) RemoveOrder() error {
 	if len(t.Info.ExecutionOrders) == 0 {
 		return errors.New("no order to be removed")
 	}
-
-	t.Info.ExecutionOrders = t.Info.ExecutionOrders[:len(t.Info.ExecutionOrders)-1]
+	t.Info.ExecutionOrders = t.Info.ExecutionOrders[1:]
 	return nil
 }
 
-func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
+func (t *ZICTrader) TradeMade(trade *common.Trade) (bool, float64) {
 	// If the trader can have multiple Bids or offers
 	// ... check that trade is still active using
 	// ... the Active orders IGNORE FOR NOW
@@ -131,6 +121,7 @@ func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
 
 	// This code also assumes quantity matches, if it does not it
 	// ... should update execute order for correct quantity and limit price
+	l := t.Info.ExecutionOrders[0].LimitPrice
 	if trade.SellOrder.TraderID == t.Info.TraderID {
 		t.Info.Balance += trade.Price - t.Info.ExecutionOrders[0].LimitPrice
 	} else {
@@ -141,7 +132,7 @@ func (t *ZICTrader) TradeMade(trade *common.Trade) bool {
 
 	// In case trade is no longer possible this should return false
 	// May be necessary for async markets
-	return true
+	return true, l
 }
 
 func (t *ZICTrader) MarketUpdate(info common.MarketUpdate) {

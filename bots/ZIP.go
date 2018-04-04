@@ -96,7 +96,7 @@ func (t *ZIPTrader) RemoveOrder() error {
 		return errors.New("no order to be removed")
 	}
 
-	t.Info.ExecutionOrders = t.Info.ExecutionOrders[:len(t.Info.ExecutionOrders)-1]
+	t.Info.ExecutionOrders = t.Info.ExecutionOrders[1:]
 	if len(t.Info.ExecutionOrders) != 0 {
 		t.limitPrice = t.Info.ExecutionOrders[0].LimitPrice
 	}
@@ -310,9 +310,11 @@ func (t *ZIPTrader) profitAlter(price float64) {
 	t.setPrice()
 }
 
-func (t *ZIPTrader) TradeMade(trade *common.Trade) bool {
+func (t *ZIPTrader) TradeMade(trade *common.Trade) (bool, float64) {
 	// Got to ZIC.go to read about this function weaknesses and reasoning
 	t.Info.TradeRecord = append(t.Info.TradeRecord, trade)
+
+	l := t.Info.ExecutionOrders[0].LimitPrice
 	if trade.SellOrder.TraderID == t.Info.TraderID {
 		t.Info.Balance += trade.Price - t.Info.ExecutionOrders[0].LimitPrice
 	} else {
@@ -324,7 +326,7 @@ func (t *ZIPTrader) TradeMade(trade *common.Trade) bool {
 		t.active = false
 	}
 
-	return true
+	return true, l
 }
 
 func (t *ZIPTrader) GetExecutionOrder() []*TraderOrder {
