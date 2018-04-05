@@ -299,7 +299,7 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay int) {
 	defer writer.Flush()
 
 	if addHeader {
-		writer.Write([]string{"ID", "TradingDay", "TimeStep", "Price", "SellerID", "BuyerID", "AskPrice", "BidPrice"})
+		writer.Write([]string{"ID", "TradingDay", "TimeStep", "Price", "SellerID", "BuyerID", "AskPrice", "BidPrice", "SL", "BL"})
 	}
 
 	for _, trade := range ob.tradeRecord {
@@ -307,11 +307,13 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay int) {
 			strconv.Itoa(trade.TradeID),
 			strconv.Itoa(tradingDay),
 			strconv.Itoa(trade.TimeStep),
-			fmt.Sprintf("%.3f", trade.Price),
+			fmt.Sprintf("%.5f", trade.Price),
 			strconv.Itoa(trade.SellOrder.TraderID),
 			strconv.Itoa(trade.BuyOrder.TraderID),
-			fmt.Sprintf("%.3f", trade.SellOrder.Price),
-			fmt.Sprintf("%.3f", trade.BuyOrder.Price),
+			fmt.Sprintf("%.5f", trade.SellOrder.Price),
+			fmt.Sprintf("%.5f", trade.BuyOrder.Price),
+			fmt.Sprintf("%.3f", trade.SLimit),
+			fmt.Sprintf("%.3f", trade.BLimit),
 		}
 		writer.Write(row)
 	}

@@ -46,13 +46,30 @@ type AllocationSchedule struct {
 	// key -1 means all trading days
 	// second key maps to trading step
 
-	Schedule map[int]map[int][]TID2RTO
+	Schedule map[int]map[int]int
 }
 
 // Help structure to pair orders to Traders
-type TID2RTO struct {
-	TraderID  int
-	ExecOrder []*bots.TraderOrder
+type SandD struct {
+	ID int
+	SIDs []int
+	BIDs []int
+	Sps []AgentLimitPrices
+	Bps []AgentLimitPrices
+}
+type SchedToPrices struct {
+	SID int`json:"SID"`
+	Day int `json:"Day, omitempty"`
+	TimeStep int `json:"TimeStep, omitempty"`
+	SLimitPrices []AgentLimitPrices `json:"SLimitPrices, omitempty"`
+	BLimitPrices []AgentLimitPrices `json:"BLimitPrices, omitempty"`
+}
+
+type AgentLimitPrices struct {
+	ID int `json:"ID"`
+	Prices []float64 `json:"LimitPrice"`
+	// Ignore for now
+	Quantities []int64 `json:"Quantities, omitempty"`
 }
 
 /* Exchange defines the basic interfaces all exchanges have to follow
@@ -73,6 +90,8 @@ type Exchange struct {
 	asks             int
 	trades           int
 	tradeRecordPrice []float64
+	SandDs map[int]SandD
+	Alloc AllocationSchedule
 }
 
 func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo, sellers, buyers []int) {
@@ -133,6 +152,7 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 	// NOTE: Should always be 1 for now it may be changed
 	trade.Quantity = 1
 	trade.Time = time.Now()
+
 	// NOTE: This code is smelly, it assumes agents accept trade and can not refuse
 	// once the order is posted for any reason
 	err := ex.orderBook.RecordTrade(trade)
@@ -147,12 +167,17 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 	ex.tradeRecordPrice[ex.trades%ex.GAVector.WindowSizeEE] = trade.Price
 	ex.trades++
 
-	ex.agents[bid.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
-	ex.agents[ask.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
-	ex.agents[bid.TraderID].TradeMade(trade)
-	ex.agents[ask.TraderID].TradeMade(trade)
-	ex.agents[bid.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
-	ex.agents[ask.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
+	//ex.agents[bid.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
+	//ex.agents[ask.TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, trade.TimeStep, trade.TradeID, trade.Price)
+	// Traders should add there limit prices
+	_, vl := ex.agents[bid.TraderID].TradeMade(trade)
+	_, sl := ex.agents[ask.TraderID].TradeMade(trade)
+
+	trade.BLimit = vl
+	trade.SLimit = sl
+
+	//ex.agents[bid.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
+	//ex.agents[ask.TraderID].LogBalance("../mexs/logs/"+ex.EID, d, trade)
 	log.WithFields(log.Fields{
 		"Time step": timeStep,
 		"BuyerID":   bid.TraderID,
@@ -163,7 +188,7 @@ func (ex *Exchange) MakeTrades(timeStep, d int) {
 
 func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 	traderType := "NONE"
-	for tries := 0; tries < 10; tries++ {
+	for tries := 0; tries < 5; tries++ {
 		traderType1, traderID := ex.EnforceBidToAskRatio(traderType, t)
 		traderType = traderType1
 		var agent bots.RobotTrader = ex.agents[traderID]
@@ -500,8 +525,11 @@ func (ex *Exchange) UpdateAgents(timeStep, day int) {
 	}
 }
 
-func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
+func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule, sAndDs map[int]SandD) {
 	ex.EID = experimentID
+	ex.SandDs = sAndDs
+	ex.Alloc = s
+
 	log.WithFields(log.Fields{
 		"Trading days":        ex.Info.TradingDays,
 		"Training time steps": ex.Info.MarketEnd,
@@ -515,6 +543,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 			"Error": err.Error(),
 		}).Error("Log Folder for this experiment could not be made")
 	}
+	ex.ScheduleToCSV(experimentID)
 
 	for d := 0; d < ex.Info.TradingDays; d++ {
 		ex.orderBook.Reset()
@@ -522,7 +551,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 		log.Info("Trading day:", d)
 		for t := 0; t < ex.Info.MarketEnd; t++ {
 			log.Info("Time-step:", t)
-			ex.RenewExecOrders(t, d, s)
+			ex.RenewExecOrders(t, d)
 
 			ok, order := ex.GetTraderOrder(t, d, experimentID)
 			if ok {
@@ -565,27 +594,123 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule) {
 }
 
 // It renews Execution Orders based on a schedule
-func (ex *Exchange) RenewExecOrders(t, d int, s AllocationSchedule) {
-	if _, ok := s.Schedule[d]; ok {
-		if _, ok := s.Schedule[d][t]; ok {
-			orders := s.Schedule[d][t]
-			for i := 0; i < len(orders); i++ {
-				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
-				ex.agents[orders[i].TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, t, -1, -1.0)
-
+func (ex *Exchange) RenewExecOrders(t, d int) {
+	// Check that there is a schedule relocation in day d at time t
+	if _, ok := ex.Alloc.Schedule[d]; ok {
+		if id, ok := ex.Alloc.Schedule[d][t]; ok {
+			// Check that schedule with id:id exists
+			if sandd, ok := ex.SandDs[id]; ok {
+				// Set orders for sellers
+				for _, lp := range sandd.Sps {
+					orders := make([]*bots.TraderOrder, len(lp.Prices))
+					for ix, p := range lp.Prices {
+						// FIXME quantity hardcoded to 1
+						order := &bots.TraderOrder{
+							LimitPrice: p,
+							Quantity: 1,
+							Type:"ASK",
+						}
+						orders[ix] = order
+					}
+					ex.agents[lp.ID].SetOrders(orders)
+				}
+				// Set orders for buyers
+				for _, lp := range sandd.Bps {
+					orders := make([]*bots.TraderOrder, len(lp.Prices))
+					for ix, p := range lp.Prices {
+						// FIXME quantity hardcoded to 1
+						order := &bots.TraderOrder{
+							LimitPrice: p,
+							Quantity: 1,
+							Type:"BID",
+						}
+						orders[ix] = order
+					}
+					ex.agents[lp.ID].SetOrders(orders)
+				}
+				log.Debug("Traders Replentish")
 			}
 		}
 	}
+}
 
-	if _, ok := s.Schedule[-1]; ok {
-		if _, ok := s.Schedule[-1][t]; ok {
-			orders := s.Schedule[-1][t]
-			for i := 0; i < len(orders); i++ {
-				ex.agents[orders[i].TraderID].SetOrders(orders[i].ExecOrder)
-				ex.agents[orders[i].TraderID].LogOrder("../mexs/logs/"+ex.EID+"/ExecOrders.csv", d, t, -1, -1.0)
-			}
+func (ex *Exchange) ScheduleToCSV(eid string) {
+	// Schedules csv works in a sort of relational table way. there is the schedule csv that links
+	// S&D ids to time step and trading dat
+	//Create schedule.csv
+	fileName1, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/schedule.csv", eid))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error":        err.Error(),
+		}).Error("Error creating schedule.scv")
+		return
+	}
+
+	file1, err := os.OpenFile(fileName1, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer file1.Close()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error":        err.Error(),
+		}).Error("Sched CSV file could not be made")
+		return
+	}
+
+	writer1 := csv.NewWriter(file1)
+	defer writer1.Flush()
+	writer1.Write([]string{"TradingDay", "TimeStep", "ScheduleID"})
+	for d, _ := range ex.Alloc.Schedule {
+		for t, id := range ex.Alloc.Schedule[d] {
+			writer1.Write([]string{
+				strconv.Itoa(d),
+				strconv.Itoa(t),
+				strconv.Itoa(id),
+			})
 		}
 	}
 
-	log.Debug("Renewed agents orders")
+	// Write limit prices for each schedule in csv
+	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/LimitPrices.csv", eid))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("Error creating schedule.scv")
+		return
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer file.Close()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("CSV file could not be made: ", fileName)
+		return
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	writer.Write([]string{"ID", "TID", "TYPE", "LIMIT"})
+
+	for id, sandd := range ex.SandDs {
+		for _, slp := range sandd.Sps {
+			for _, ps := range slp.Prices {
+				writer.Write([]string{
+					strconv.Itoa(id),
+					strconv.Itoa(slp.ID),
+					"ASK",
+					fmt.Sprintf("%.2f", ps),
+				})
+			}
+		}
+
+		for _, blp := range sandd.Bps {
+			for _, ps := range blp.Prices {
+				writer.Write([]string{
+					strconv.Itoa(id),
+					strconv.Itoa(blp.ID),
+					"BID",
+					fmt.Sprintf("%.2f", ps),
+				})
+			}
+		}
+	}
 }

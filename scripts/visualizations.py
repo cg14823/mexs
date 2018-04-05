@@ -17,7 +17,6 @@ def plot_elite_score(eid):
     ax.plot(elites['Gen'], elites['Score'])
     ax.grid()
 
-
 def plot_gen_scores(eid):
     f = '../logs/{}/chromozones.csv'.format(eid)
     f1 = '../logs/{}/elite.csv'.format(eid)
@@ -142,10 +141,6 @@ def plot_avg_genes(eid):
     axdo.legend()
     axdo.grid()
 
-
-    
-    
-    
 def plot_elite_genes(eid):
     pass
 
@@ -177,33 +172,21 @@ def trades(eid, ep=None):
         ax.grid()
         ax.legend()
 
-
-
 def supplyDemand(eid):
-    files = glob.glob('../logs/'+eid+'/LIMITPRICES_*.csv')
+    LpsF = '../logs/'+eid+'/LimitPrices.csv'
+    SchedsF = '../logs/'+eid+'/schedule.csv'
+
+    lps = pd.read_csv(filepath_or_buffer=LpsF)
+    sched = pd.read_csv(filepath_or_buffer=SchedsF)
+    schedIds = sched['ScheduleID'].unique()
+
     prices_times = []
-    for f in files:
-        trades = pd.read_csv(filepath_or_buffer=f)
-        demand = trades.loc[(trades["TYPE"] == "BID") & (trades["NUMBER"] == 0)].sort_values(by=['LIMIT_PRICE'],ascending=False).as_matrix(['LIMIT_PRICE'])
-        supply = trades.loc[(trades["TYPE"] == "ASK") & (trades["NUMBER"] == 0)].sort_values(by=['LIMIT_PRICE'],ascending=True).as_matrix(['LIMIT_PRICE'])
+    for id in schedIds:
+        demand = lps.loc[(lps["TYPE"] == "BID") & (lps["ID"] == id)].sort_values(by=['LIMIT'],ascending=False).as_matrix(['LIMIT'])
+        supply = lps.loc[(lps["TYPE"] == "ASK") & (lps["ID"] == id)].sort_values(by=['LIMIT'],ascending=True).as_matrix(['LIMIT'])
 
         quantityD = np.asarray(range(0,len(demand[:,0])+1, 1))
         quantityS = np.asarray(range(0,len(supply[:,0])+1, 1))
-
-        # #  This only work for linearish graphs, if the graphs where exponential another formula should be used
-        # # Better way would be using a line intersection algorithm
-        # # Pe = gradentSuppy * Qe + Cs = gradentDemant * Qe +Cd
-        # # Qe = (Cd -Cs) / (gradeintSupply -gradientDemand)
-        # gradientSupply = float(supply[-1] -supply[0])/ float(len(supply[:,0]) - 1)
-        # gradientDemand = float(demand[-1] -demand[0])/ float(len(demand[:,0]) - 1)
-        # Cs = supply[0]
-        # Cd = demand[0]
-        # print(Cs)
-        # print(Cd)
-        # Qe =  float(Cd -Cs) / float(gradientSupply -gradientDemand)
-        # Pe = gradientSupply *Qe +Cs
-        # print(Qe)
-        # print(Pe)
         found = False
         si =0
         di =0
@@ -225,8 +208,8 @@ def supplyDemand(eid):
                 pe = (demand[di] +supply[si]) / 2.0
                 qe = (di + si)/2.0
 
-        number = f[f.find('_')+1:f.find('.csv')]
-        figSD = plt.figure("Supply demand curve #{}".format(number))
+       
+        figSD = plt.figure("Supply demand curve #{}".format(id))
         ax = figSD.add_subplot(111)
         ax.set_xlabel("Quantity")
         ax.set_ylabel("Price")
@@ -238,18 +221,25 @@ def supplyDemand(eid):
         dee = [dee[0]] + dee
         suu = [suu[0]] + suu
         print(dee)
-        ax.xaxis.set_ticks(range(0, max(quantityD[-1], quantityS[-1])+1))
+        step = 1
+        limit = max(quantityD[-1], quantityS[-1])+1
+        if limit >= 50:
+            step = 2
+        if limit >=100:
+            step = 5
+        ax.xaxis.set_ticks(range(0, limit, step))
         ax.step(quantityD, dee, 'r', label="demand")
         ax.step(quantityS, suu, 'g', label="supply")
 
         if found:
-            ax.plot([0, qe], [pe, pe], linestyle='-', color="b")
-            ax.plot([qe,qe], [0, pe], linestyle='-', color="b")
+            ax.plot([0, qe], [pe, pe], linestyle='--', color="b")
+            ax.plot([qe,qe], [0, pe], linestyle='--', color="b")
             print(pe)
             prices_times.append(pe)
         ax.legend()
-
+    
     return prices_times
+
 
 def main():
     print(sys.argv)

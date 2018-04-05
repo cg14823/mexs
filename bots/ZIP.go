@@ -65,6 +65,7 @@ func (t *ZIPTrader) InitRobotCore(id int, sellerOrBuyer string, marketInfo commo
 	t.prevBestBidPrice = -1
 	t.prevBestAskPrice = -1
 	t.job = &TraderOrder{Type: "NA"}
+	t.limitPrice = 0
 }
 
 func (t *ZIPTrader) setPrice() {
@@ -74,21 +75,65 @@ func (t *ZIPTrader) setPrice() {
 
 func (t *ZIPTrader) SetOrders(orders []*TraderOrder) {
 	t.Info.ExecutionOrders = orders
-	t.limitPrice = orders[0].LimitPrice
+
 	t.active = true
 	t.job = orders[0]
+
 	if t.job.IsBid() {
 		t.margin = t.marginBuy
 	} else {
 		t.margin = t.marginSell
 	}
-	t.limitPrice = t.job.LimitPrice
-	quotePrice := t.job.LimitPrice * (1.0 + t.margin)
-	t.price = quotePrice
+
+	if t.limitPrice == 0 {
+		t.limitPrice = t.job.LimitPrice
+		t.setPrice()
+	} else {
+		t.limitPrice = t.job.LimitPrice
+		t.DealWithMarginOnOrderChange(t.limitPrice, orders[0].Type)
+	}
 }
 
 func (t *ZIPTrader) AddOrder(order *TraderOrder) {
 	t.Info.ExecutionOrders = append(t.Info.ExecutionOrders, order)
+}
+
+func (t *ZIPTrader) ResetMargins(orderType string){
+	t.marginBuy = -(0.05 + 0.3*rand.Float64())
+	t.marginSell = 0.05 + 0.3*rand.Float64()
+	if orderType == "BID" {
+		t.margin = t.marginBuy
+	} else {
+		t.margin = t.marginSell
+	}
+}
+
+func (t *ZIPTrader) ChangeMarginsWithNewOrder(orderPrice float64, orderType string) {
+
+	if orderType == "BID" {
+
+		// bidPrice = oldLimit* (1 + t.marginBuy)
+		// change so that if new margin gives same price but margin updated
+		// so  bidPrice = newLimit * (1 +t.marginBuy)
+		// t.marginBuy = (bidPrice / newLimit) - 1
+		// Only do this if your previous bid was worse than the new limit price
+
+		if t.price < orderPrice {
+			t.marginBuy = (t.price / orderPrice) - 1
+			t.margin = t.marginBuy
+		}
+	} else {
+		if t.price > orderPrice {
+			t.marginSell = (t.price / orderPrice) - 1
+			t.margin = t.marginSell
+		}
+	}
+
+}
+
+func (t *ZIPTrader) DealWithMarginOnOrderChange(orderPrice float64, orderType string) {
+	t.ChangeMarginsWithNewOrder(t.limitPrice, t.Info.ExecutionOrders[0].Type)
+	t.setPrice()
 }
 
 func (t *ZIPTrader) RemoveOrder() error {
@@ -99,6 +144,7 @@ func (t *ZIPTrader) RemoveOrder() error {
 	t.Info.ExecutionOrders = t.Info.ExecutionOrders[1:]
 	if len(t.Info.ExecutionOrders) != 0 {
 		t.limitPrice = t.Info.ExecutionOrders[0].LimitPrice
+		t.DealWithMarginOnOrderChange(t.limitPrice,t.Info.ExecutionOrders[0].Type )
 	}
 	return nil
 }

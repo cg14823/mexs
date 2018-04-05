@@ -1,24 +1,22 @@
 package main
 
 import (
-	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"io/ioutil"
-	"math/rand"
 	"mexs/bots"
 	"mexs/common"
 	"mexs/exchange"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
+
+
+
+
 
 type ConfigFile struct {
 	EID       string                     `json:"EID"`
@@ -30,8 +28,6 @@ type ConfigFile struct {
 	// AlgoS and AlgoB is the trading algo used by sellers aad buyers respectively
 	AlgoS        []string          `json:"AlgoS"`
 	AlgoB        []string          `json:"AlgoB"`
-	Sps          []float64         `json:"Sps"`
-	Bps          []float64         `json:"Bps"`
 	ScheduleType string            `json:"ScheduleType"`
 	Info         common.MarketInfo `json:"MarketInfo"`
 	Gens         int               `json:"Gens,omitempty"`
@@ -40,6 +36,8 @@ type ConfigFile struct {
 	CInit        string            `json:"CInit, omitempty"`
 	EQ           float64           `json:"EQ, omitempty"`
 	EP           float64           `json:"EP, omitempty"`
+	SandDs map[int]exchange.SandD
+	Sched []exchange.SchedToPrices `json:"Schedule, omitempty"`
 }
 
 func init() {
@@ -170,87 +168,94 @@ type ExperimentConfig struct {
 	CInit       string `json:"CInit, omitempty"`
 	EP          float64
 	EQ          float64
+	SandDs map[int]exchange.SandD
+	SLP []exchange.AgentLimitPrices `json:"SLimitPrices, omitempty"`
+	BLP []exchange.AgentLimitPrices `json:"BLimitPrices, omitempty"`
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
 	configFile := strings.TrimSpace(c.String("config-file"))
 	if configFile != "NIL" {
 		return getConfigFile(configFile, c)
+	} else{
+		log.Panic("A configuration file is required to be passed in use flag --config-file")
+		return ExperimentConfig{}
 	}
 
-	log.SetLevel(log.InfoLevel)
-	logLevel := strings.TrimSpace(c.String("log-level"))
-	switch logLevel {
-	case "Debug":
-		log.SetLevel(log.DebugLevel)
-	case "Info":
-		log.SetLevel(log.InfoLevel)
-	case "Warn":
-		log.SetLevel(log.WarnLevel)
-	case "Error":
-		log.SetLevel(log.ErrorLevel)
-	default:
-		log.SetLevel(log.InfoLevel)
-	}
+	// FIXME ONLY RUNNABLE THOUGH CONFIG FILE NOW
 
-	minSeller := float64(c.Int("slp"))
-	step := float64(c.Int("slps"))
-	nSellers := c.Int("num-sellers")
-	sps := generateSteppedPrices(minSeller, step, 0, nSellers)
-	minBuyer := float64(c.Int("blp"))
-	step = float64(c.Int("blps"))
-	nBuyers := c.Int("num-buyers")
-	bps := generateSteppedPrices(minBuyer, step, 0, nBuyers)
-
-	marketInfo := common.MarketInfo{
-		MaxPrice:     100.0,
-		MinPrice:     1.0,
-		MinIncrement: 1,
-		MarketEnd:    c.Int("ts"),
-		TradingDays:  c.Int("days"),
-	}
-
-	traders := make(map[int]bots.RobotTrader)
-	traders, sellersIDS := MakeTraders(sps, 0, nSellers, "SELLER", c.String("seller-algo"),
-		traders, marketInfo)
-	traders, buyersIDS := MakeTraders(bps, nSellers, nBuyers, "BUYER", c.String("buyer-algo"),
-		traders, marketInfo)
-
-	GAp := exchange.AuctionParameters{
-		BidAskRatio:  1,
-		KPricing:     0.5,
-		MinIncrement: 1,
-		MaxShift:     2,
-		WindowSizeEE: 3,
-		DeltaEE:      10.0,
-		Dominance:    0,
-	}
-
-	eConfig := ExperimentConfig{
-		GA:         GAp,
-		EID:        strings.TrimSpace(c.String("eid")),
-		Days:       c.Int("days"),
-		Ts:         c.Int("ts"),
-		SellersIDs: sellersIDS,
-		BuyersIDs:  buyersIDS,
-		Agents:     traders,
-		MarketInfo: marketInfo,
-		Schedule:   generateBasicAllocationSchedule(traders),
-		Sps:        sps,
-		Bps:        bps,
-	}
-
-	return eConfig
+	//log.SetLevel(log.InfoLevel)
+	//logLevel := strings.TrimSpace(c.String("log-level"))
+	//switch logLevel {
+	//case "Debug":
+	//	log.SetLevel(log.DebugLevel)
+	//case "Info":
+	//	log.SetLevel(log.InfoLevel)
+	//case "Warn":
+	//	log.SetLevel(log.WarnLevel)
+	//case "Error":
+	//	log.SetLevel(log.ErrorLevel)
+	//default:
+	//	log.SetLevel(log.InfoLevel)
+	//}
+	//
+	//minSeller := float64(c.Int("slp"))
+	//step := float64(c.Int("slps"))
+	//nSellers := c.Int("num-sellers")
+	//sps := generateSteppedPrices(minSeller, step, 0, nSellers)
+	//minBuyer := float64(c.Int("blp"))
+	//step = float64(c.Int("blps"))
+	//nBuyers := c.Int("num-buyers")
+	//bps := generateSteppedPrices(minBuyer, step, 0, nBuyers)
+	//
+	//marketInfo := common.MarketInfo{
+	//	MaxPrice:     100.0,
+	//	MinPrice:     1.0,
+	//	MinIncrement: 1,
+	//	MarketEnd:    c.Int("ts"),
+	//	TradingDays:  c.Int("days"),
+	//}
+	//
+	//traders := make(map[int]bots.RobotTrader)
+	//traders, sellersIDS := MakeTraders(sps, 0, nSellers, "SELLER", c.String("seller-algo"),
+	//	traders, marketInfo)
+	//traders, buyersIDS := MakeTraders(bps, nSellers, nBuyers, "BUYER", c.String("buyer-algo"),
+	//	traders, marketInfo)
+	//
+	//GAp := exchange.AuctionParameters{
+	//	BidAskRatio:  1,
+	//	KPricing:     0.5,
+	//	MinIncrement: 1,
+	//	MaxShift:     2,
+	//	WindowSizeEE: 3,
+	//	DeltaEE:      10.0,
+	//	Dominance:    0,
+	//}
+	//
+	//sched, sand := generateBasicAllocationSchedule(sellersIDS, buyersIDS, sps, bps, marketInfo.TradingDays)
+	//eConfig := ExperimentConfig{
+	//	GA:         GAp,
+	//	EID:        strings.TrimSpace(c.String("eid")),
+	//	Days:       c.Int("days"),
+	//	Ts:         c.Int("ts"),
+	//	SellersIDs: sellersIDS,
+	//	BuyersIDs:  buyersIDS,
+	//	Agents:     traders,
+	//	MarketInfo: marketInfo,
+	//	Schedule:   sched,
+	//	SandDs: sand,
+	//	Sps:        sps,
+	//	Bps:        bps,
+	//}
+	//
+	//return eConfig
 }
 
 func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo string,
 	traders map[int]bots.RobotTrader, info common.MarketInfo) (map[int]bots.RobotTrader, []int) {
-
 	ids := make([]int, n)
-	orderType := "ASK"
 	tType := "SELLER"
 	if traderType == "BUYER" {
-		orderType = "BID"
 		tType = "SELLER"
 	}
 
@@ -258,11 +263,6 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 		for i := 0; i < n; i++ {
 			zip := &bots.ZIPTrader{}
 			zip.InitRobotCore(i+idStart, tType, info)
-			zip.AddOrder(&bots.TraderOrder{
-				LimitPrice: limitPrices[i],
-				Quantity:   1,
-				Type:       orderType,
-			})
 			traders[zip.Info.TraderID] = zip
 			ids[i] = zip.Info.TraderID
 		}
@@ -270,11 +270,6 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 		for i := 0; i < n; i++ {
 			zip := &bots.ZICTrader{}
 			zip.InitRobotCore(i+idStart, tType, info)
-			zip.AddOrder(&bots.TraderOrder{
-				LimitPrice: limitPrices[i],
-				Quantity:   1,
-				Type:       orderType,
-			})
 			traders[zip.Info.TraderID] = zip
 			ids[i] = zip.Info.TraderID
 		}
@@ -282,11 +277,6 @@ func MakeTraders(limitPrices []float64, idStart, n int, traderType, traderAlgo s
 		for i := 0; i < n; i++ {
 			t := &bots.AATrader{}
 			t.InitRobotCore(i+idStart, tType, info)
-			t.AddOrder(&bots.TraderOrder{
-				LimitPrice: limitPrices[i],
-				Quantity:   1,
-				Type:       orderType,
-			})
 			traders[t.Info.TraderID] = t
 			ids[i] = t.Info.TraderID
 		}
@@ -303,10 +293,12 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		log.Panic(err.Error())
 	}
 
+	// Parse json into ConfigFile struct
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 	var configFile ConfigFile
 	json.Unmarshal(byteValue, &configFile)
 
+	// Set log level only set through command line
 	log.SetLevel(log.InfoLevel)
 	logLevel := strings.TrimSpace(c.String("log-level"))
 	switch logLevel {
@@ -322,50 +314,29 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		log.SetLevel(log.InfoLevel)
 	}
 
+	// Generate experiment id
 	if configFile.EID == "" {
 		configFile.EID = strings.TrimSpace(c.String("eid"))
 	}
 
+	// Create the agents for the experiment
 	traders := make(map[int]bots.RobotTrader)
 	for i, id := range configFile.SellerIDs {
 		switch configFile.AlgoS[i] {
 		case "ZIP":
 			zipT := &bots.ZIPTrader{}
 			zipT.InitRobotCore(id, "SELLER", configFile.Info)
-			zipT.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Sps[i],
-				Quantity:   1,
-				Type:       "ASK",
-			})
 			traders[zipT.Info.TraderID] = zipT
 		case "ZIC":
 			zic := &bots.ZICTrader{}
 			zic.InitRobotCore(id, "SELLER", configFile.Info)
-			zic.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Sps[i],
-				Quantity:   1,
-				Type:       "ASK",
-			})
 			traders[zic.Info.TraderID] = zic
 		case "AA":
 			aa := &bots.AATrader{}
 			aa.InitRobotCore(id, "SELLER", configFile.Info)
-			aa.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Sps[i],
-				Quantity:   1,
-				Type:       "ASK",
-			})
 			traders[aa.Info.TraderID] = aa
 		default:
-			// FIXME: If incorrect type default to ZIP for now
-			zipT := &bots.ZIPTrader{}
-			zipT.InitRobotCore(id, "SELLER", configFile.Info)
-			zipT.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Sps[i],
-				Quantity:   1,
-				Type:       "ASK",
-			})
-			traders[zipT.Info.TraderID] = zipT
+			log.Panic("SHIIT")
 		}
 	}
 
@@ -374,43 +345,21 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		case "ZIP":
 			zipT := &bots.ZIPTrader{}
 			zipT.InitRobotCore(id, "BUYER", configFile.Info)
-			zipT.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Bps[i],
-				Quantity:   1,
-				Type:       "BID",
-			})
 			traders[zipT.Info.TraderID] = zipT
 		case "ZIC":
 			zic := &bots.ZICTrader{}
 			zic.InitRobotCore(id, "BUYER", configFile.Info)
-			zic.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Bps[i],
-				Quantity:   1,
-				Type:       "BID",
-			})
 			traders[zic.Info.TraderID] = zic
 		case "AA":
 			aa := &bots.AATrader{}
 			aa.InitRobotCore(id, "BUYER", configFile.Info)
-			aa.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Bps[i],
-				Quantity:   1,
-				Type:       "BID",
-			})
 			traders[aa.Info.TraderID] = aa
 		default:
-			// FIXME: If incorrect type default to ZIP for now
-			zipT := &bots.ZIPTrader{}
-			zipT.InitRobotCore(id, "BUYER", configFile.Info)
-			zipT.AddOrder(&bots.TraderOrder{
-				LimitPrice: configFile.Bps[i],
-				Quantity:   1,
-				Type:       "BID",
-			})
-			traders[zipT.Info.TraderID] = zipT
+			log.Panic("SHIIT")
 		}
 	}
 
+	sched, sand := generateSchedule(configFile.ScheduleType,configFile.SellerIDs, configFile.BuyerIDs, configFile.Sched, configFile.Days)
 	return ExperimentConfig{
 		EID:        configFile.EID,
 		GA:         configFile.GA,
@@ -420,10 +369,9 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		BuyersIDs:  configFile.BuyerIDs,
 		MarketInfo: configFile.Info,
 		Agents:     traders,
-		Sps:        configFile.Sps,
-		Bps:        configFile.Bps,
 		// For now only standard schedule accepted
-		Schedule:    generateBasicAllocationSchedule(traders),
+		Schedule:    sched,
+		SandDs: sand,
 		Gens:        configFile.Gens,
 		Individuals: configFile.Individuals,
 		FitnessFN:   configFile.FitnessFN,
@@ -439,166 +387,51 @@ func experiment(c *cli.Context) {
 	ex := exchange.Exchange{}
 	ex.Init(eConfig.GA, eConfig.MarketInfo, eConfig.SellersIDs, eConfig.BuyersIDs)
 	ex.SetTraders(eConfig.Agents)
-	ex.StartMarket(eConfig.EID, eConfig.Schedule)
-	supplyAndDemandToCSV(eConfig.Sps, eConfig.Bps, eConfig.EID, "0")
+	ex.StartMarket(eConfig.EID, eConfig.Schedule, eConfig.SandDs)
 }
 
-// TODO: create tools to automatically create limit prices, orders and
-// instantiate traders
-// TODO: create a tool for schedule generation
 
-func main1() {
-	// NOTE: proof of concept market experiment
-	//nOfAgents := 30
-	log.Debug("Starting Main")
-	rand.Seed(time.Now().UnixNano())
-	GAp := exchange.AuctionParameters{
-		BidAskRatio:  0.5,
-		KPricing:     0.5,
-		MinIncrement: 1,
-		MaxShift:     1,
-		Dominance:    0,
-	}
-
-	marketInfo := common.MarketInfo{
-		MaxPrice:     100.0,
-		MinPrice:     1.0,
-		MinIncrement: GAp.MinIncrement,
-		MarketEnd:    10,
-		TradingDays:  1,
-	}
-
-	sellersN := 30
-	buyersN := 30
-	// NOTE: Use the same for now
-	sellerPrices := generateSteppedPrices(5.0, 1, 0, sellersN)
-	buyerPrices := generateSteppedPrices(5.0, 1.0, 0, buyersN)
-	sellerIDs := make([]int, sellersN)
-	buyerIDs := make([]int, buyersN)
-
-	log.Debug("SellerPrices:", sellerPrices)
-	log.Debug("BuyerPrices:", buyerPrices)
-
-	traders := make(map[int]bots.RobotTrader)
-	for i := 0; i < buyersN; i++ {
-		zip := &bots.ZIPTrader{}
-		zip.InitRobotCore(i, "BUYER", marketInfo)
-		zip.AddOrder(&bots.TraderOrder{
-			LimitPrice: buyerPrices[i],
-			Quantity:   1,
-			Type:       "BID",
-		})
-		traders[zip.Info.TraderID] = zip
-		buyerIDs[i] = zip.Info.TraderID
-	}
-
-	for i := 0; i < sellersN; i++ {
-		zip := &bots.ZIPTrader{}
-		zip.InitRobotCore(i+buyersN, "SELLER", marketInfo)
-		zip.AddOrder(&bots.TraderOrder{
-			LimitPrice: sellerPrices[i],
-			Quantity:   1,
-			Type:       "ASK",
-		})
-		traders[zip.Info.TraderID] = zip
-		sellerIDs[i] = zip.Info.TraderID
-	}
-
-	s := generateBasicAllocationSchedule(traders)
-
-	ex := exchange.Exchange{}
-	ex.Init(GAp, marketInfo, sellerIDs, buyerIDs)
-	ex.SetTraders(traders)
-	experimentID := uuid.New()
-	ex.StartMarket(experimentID.String(), s)
-	supplyAndDemandToCSV(sellerPrices, buyerPrices, experimentID.String(), "1")
-}
-
-// generateSteppedPrices creates limit prices
-// @param min :- minimum value
-// @param noise :- rand [-noise, ..., noise] added to values
-// @param n is the number of prices to generate
-func generateSteppedPrices(min, step float64, noise, n int) []float64 {
-	prices := make([]float64, n)
-	if noise != 0 {
-
-		for i := 0; i < n; i++ {
-			prices[i] = min + float64(i)*step + float64(rand.Intn(2*noise)-noise)
-		}
-
-		return prices
-	}
-
-	for i := 0; i < n; i++ {
-		prices[i] = min + float64(i)*step
-	}
-
-	return prices
-}
-
-func generateBasicAllocationSchedule(traders map[int]bots.RobotTrader) exchange.AllocationSchedule {
-	// This generates an allocation schedule in which all traders get the same order each training day
-
-	s := exchange.AllocationSchedule{
-		Schedule: make(map[int]map[int][]exchange.TID2RTO),
-	}
-	s.Schedule[-1] = make(map[int][]exchange.TID2RTO)
-	s.Schedule[-1][0] = make([]exchange.TID2RTO, 0)
-
-	for k, v := range traders {
-		tido := exchange.TID2RTO{
-			TraderID:  k,
-			ExecOrder: v.GetExecutionOrder(),
-		}
-		s.Schedule[-1][0] = append(s.Schedule[-1][0], tido)
-	}
-	return s
-}
-
-func supplyAndDemandToCSV(sellers, buyers []float64, experimentID string, number string) {
-	sort.Sort(float64arr(sellers))
-	sort.Sort(sort.Reverse(float64arr(buyers)))
-
-	fileName, err := filepath.Abs(fmt.Sprintf("../mexs/logs/%s/LIMITPRICES_%s.csv", experimentID, number))
-	if err != nil {
+// Create schedule based on config file
+// For now only standard supported
+// Standard schedule all traders get the same units at the start of the trading day
+// To be supported [MarketShock, stepped]
+func generateSchedule(schedType string, sellerIDs, buyerIDs []int, schedAndPrices []exchange.SchedToPrices, days int) (exchange.AllocationSchedule, map[int]exchange.SandD) {
+	switch schedType {
+	case "STANDARD":
+		return generateStandardSched(sellerIDs, buyerIDs, schedAndPrices[0], days)
+	default:
 		log.WithFields(log.Fields{
-			"experimentID": experimentID,
-			"error":        err.Error(),
-		}).Error("File Path not found")
-		return
+			"Valid options": "[STANDARD]",
+			"Given option": schedType,
+		}).Panic("The schedule type is unsupported")
+		return exchange.AllocationSchedule{}, make(map[int]exchange.SandD)
+	}
+}
+
+// Standard schedule has only one set of limit prices that are refilled each day
+func generateStandardSched(sellerIDs, buyerIDs []int, schedAndPrices exchange.SchedToPrices, days int)(exchange.AllocationSchedule, map[int]exchange.SandD) {
+	allocSched := exchange.AllocationSchedule{
+		Schedule: make(map[int]map[int]int),
 	}
 
-	file, err := os.Create(fileName)
-	defer file.Close()
-	if err != nil {
-		log.WithFields(log.Fields{
-			"experimentID": experimentID,
-			"error":        err.Error(),
-		}).Error("Limit prices CSV file could not be made")
-		return
+	for d:=0; d < days; d++ {
+		allocSched.Schedule[d] = make(map[int]int)
+		allocSched.Schedule[d][0] = schedAndPrices.SID
 	}
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-	// Type 1 is ask, type 2 is bid
-	writer.Write([]string{"NUMBER", "TYPE", "LIMIT_PRICE"})
-	for _, v := range sellers {
-		writer.Write([]string{
-			number,
-			"ASK",
-			fmt.Sprintf("%.3f", v),
-		})
+
+	sandd := exchange.SandD{
+		ID: schedAndPrices.SID,
+		SIDs: sellerIDs,
+		BIDs: buyerIDs,
+		Sps: schedAndPrices.SLimitPrices,
+		Bps: schedAndPrices.BLimitPrices,
 	}
 
-	for _, v := range buyers {
-		writer.Write([]string{
-			number,
-			"BID",
-			fmt.Sprintf("%.3f", v),
-		})
-	}
+	sMap := make(map[int]exchange.SandD)
+	sMap[schedAndPrices.SID] = sandd
 
-	log.Debug("Trades saved to file:", fileName)
+	return allocSched, sMap
 }
 
 type float64arr []float64
@@ -631,8 +464,7 @@ func itRun(c *cli.Context) {
 		ex := exchange.Exchange{}
 		ex.Init(config.GA, config.MarketInfo, config.SellersIDs, config.BuyersIDs)
 		ex.SetTraders(config.Agents)
-		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule)
-		supplyAndDemandToCSV(config.Sps, config.Bps, config.EID+"_"+strconv.Itoa(i), "0")
+		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule, config.SandDs)
 	}
 }
 
@@ -649,7 +481,7 @@ func itGA(c *cli.Context) {
 			CurrentGen:          0,
 			EquilibriumQuantity: config.EQ,
 			EquilibriumPrice:    config.EP,
-			MutationRate: 0.1,
+			MutationRate: 0.06,
 		}
 		ga.Start()
 	}

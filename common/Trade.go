@@ -71,7 +71,7 @@ func (o ByTimeStep) Less(i, j int) bool {
 func (o *Order) IsValid() bool {
 	if o.TraderID >= 0 &&
 		(o.OrderType == "BID" || o.OrderType == "ASK") &&
-		o.Price > 0 && o.TimeStep >= 0 &&
+		o.Price >= ^ 0 && o.TimeStep >= 0 &&
 		o.Quantity > 0 {
 		return true
 	} else if o.TraderID >= 0 && (o.OrderType == "NAN" || o.OrderType == "NA") {
@@ -85,6 +85,8 @@ type Trade struct {
 	TradeID   int
 	BuyOrder  *Order
 	SellOrder *Order
+	BLimit float64
+	SLimit float64
 	Price     float64
 	Quantity  int
 	TimeStep  int
