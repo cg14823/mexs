@@ -171,6 +171,8 @@ type ExperimentConfig struct {
 	SandDs map[int]exchange.SandD
 	SLP []exchange.AgentLimitPrices `json:"SLimitPrices, omitempty"`
 	BLP []exchange.AgentLimitPrices `json:"BLimitPrices, omitempty"`
+	AlgoS        []string          `json:"AlgoS"`
+	AlgoB        []string          `json:"AlgoB"`
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
@@ -378,6 +380,8 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		CInit:       configFile.CInit,
 		EQ:          configFile.EQ,
 		EP:          configFile.EP,
+		AlgoS: configFile.AlgoS,
+		AlgoB: configFile.AlgoB,
 	}
 }
 

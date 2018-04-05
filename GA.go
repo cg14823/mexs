@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"mexs/bots"
 )
 
 type tradesCSV struct {
@@ -263,7 +264,7 @@ func (g *GA) MakeGen(cs []exchange.AuctionParameters, gen string) {
 	for i := 0; i < g.N; i++ {
 		ex := &exchange.Exchange{}
 		ex.Init(cs[i], g.Config.MarketInfo, g.Config.SellersIDs, g.Config.BuyersIDs)
-		ex.SetTraders(g.Config.Agents)
+		ex.SetTraders(g.ReMakeAgents())
 		ex.StartMarket(g.Config.EID+"/GEN_"+gen+"/IND_"+strconv.Itoa(i), g.Config.Schedule, g.Config.SandDs)
 	}
 }
@@ -700,4 +701,46 @@ func (g *GA) logElite(elite exchange.AuctionParameters, score float64, ix int, g
 		strconv.Itoa(elite.Dominance),
 	})
 
+}
+
+func (g* GA) ReMakeAgents() map[int]bots.RobotTrader {
+	traders := make(map[int]bots.RobotTrader)
+	for i, id := range g.Config.SellersIDs {
+		switch g.Config.AlgoS[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "SELLER", g.Config.MarketInfo)
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "SELLER", g.Config.MarketInfo)
+			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.AATrader{}
+			aa.InitRobotCore(id, "SELLER", g.Config.MarketInfo)
+			traders[aa.Info.TraderID] = aa
+		default:
+			log.Panic("SHIIT")
+		}
+	}
+
+	for i, id := range g.Config.BuyersIDs {
+		switch g.Config.AlgoB[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "BUYER", g.Config.MarketInfo)
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "BUYER", g.Config.MarketInfo)
+			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.AATrader{}
+			aa.InitRobotCore(id, "BUYER", g.Config.MarketInfo)
+			traders[aa.Info.TraderID] = aa
+		default:
+			log.Panic("SHIIT")
+		}
+	}
+	return traders
 }
