@@ -147,6 +147,8 @@ func (ob *OrderBook) Reset() {
 	ob.askBook.init("ASK", 100)
 	ob.bidBook = OrderBookHalf{}
 	ob.bidBook.init("BID", 100)
+	ob.bidBook.SetBestData()
+	ob.askBook.SetBestData()
 	ob.tradeRecord = make([]*common.Trade, 0)
 }
 
@@ -219,11 +221,12 @@ func (ob *OrderBook) GetNextTradeID() int {
 
 func (ob *OrderBook) FindPossibleTrade() (trade bool, bid, ask *common.Order, err error) {
 	askError := ob.askBook.SetBestData()
+	bidError := ob.bidBook.SetBestData()
 	if askError != nil {
 		return false, &common.Order{}, &common.Order{}, askError
 	}
 
-	bidError := ob.bidBook.SetBestData()
+
 	if bidError != nil {
 		return false, &common.Order{}, &common.Order{}, bidError
 	}
@@ -260,6 +263,8 @@ func (ob *OrderBook) RecordTrade(trade *common.Trade) error {
 		}).Error("can not remove order so trade not made")
 		return err
 	}
+	ob.askBook.SetBestData()
+	ob.bidBook.SetBestData()
 
 	ob.tradeRecord = append(ob.tradeRecord, trade)
 	ob.lastTrade = trade
@@ -319,4 +324,11 @@ func (ob *OrderBook) TradesToCSV(experimentID string, tradingDay int) {
 	}
 
 	log.Debug("Trades saved to file:", fileName)
+}
+
+func (ob *OrderBook) SetBest (){
+	ob.askBook.BestPrice = -1
+	ob.bidBook.BestPrice = -1
+	ob.askBook.SetBestData()
+	ob.bidBook.SetBestData()
 }

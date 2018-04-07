@@ -13,11 +13,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+	fastRand "math/rand"
 )
 
 // AuctionParameters are the ones to be evolved by the GA
 type AuctionParameters struct {
-	// BidAskRatio is the proportion buyers to sellers
+	// BidAskRatio is the bids/(bids +asks)
 	BidAskRatio float64 `json:"BidAskRatio"`
 	// k coefficient in k pricing rule pF = k *pB + (1-k)pA
 	KPricing float64 `json:"KPricing"`
@@ -292,58 +293,38 @@ func (ex *Exchange) RandomAgentPicker(traderType string, t int) (string, int) {
 
 // Returns the id of the trader to be asked
 func (ex *Exchange) nextBuyerOrSeller(t int) string {
-	// First we deal with the edge cases of when the bid:ask is either 0 or INf
-	if math.IsInf(ex.GAVector.BidAskRatio, 0) {
-		// Only bids
-		if numBuyers := len(ex.BuyersIDs); numBuyers > 0 {
+	// case where no bids or ask made choose at random
+	tOrders := ex.totalOrders()
+	if tOrders == 0 {
+		x := fastRand.Float64()
+		if x < 0.5 {
 			return "buyer"
 		}
-		log.WithFields(log.Fields{
-			"Bid:Ask":  ex.GAVector.BidAskRatio,
-			"#Sellers": len(ex.SellersIDs),
-			"#Buyers":  len(ex.BuyersIDs),
-			"Function": "NextBuyerOrSeller",
-		}).Error("Error Next is buyer but the are no buyers")
-		panic("No buyers")
-	}
-
-	if ex.GAVector.BidAskRatio == 0 {
-		// Only asks
-		if numSellers := len(ex.SellersIDs); numSellers > 0 {
-			return "seller"
-		}
-
-		log.WithFields(log.Fields{
-			"Bid:Ask":  ex.GAVector.BidAskRatio,
-			"#Sellers": len(ex.SellersIDs),
-			"#Buyers":  len(ex.BuyersIDs),
-			"Function": "enforceBidToAskRatio",
-		}).Error("Error selecting random seller")
-		panic("No Sellers")
-	}
-
-	currentRatio := float64(ex.bids) / float64(ex.asks)
-	log.WithFields(log.Fields{
-		"Bid:Ask":  ex.GAVector.BidAskRatio,
-		"#Sellers": len(ex.SellersIDs),
-		"#Buyers":  len(ex.BuyersIDs),
-		"Function": "enforceBidToAskRatio",
-		"Timestep": t,
-	}).Debug("current bid ask before this time step :", currentRatio)
-
-	if currentRatio > ex.GAVector.BidAskRatio {
-		// this means that we need to lower our ratio thus select aks
 		return "seller"
-	} else if currentRatio < ex.GAVector.BidAskRatio {
+	}
+	// Choose at random if current BA is same as he one we want
+	currentBa := ex.currentBA()
+	if currentBa == ex.GAVector.BidAskRatio {
+		x := fastRand.Float64()
+		if x < 0.5 {
+			return "buyer"
+		}
+		return "seller"
+	}
+
+	if currentBa < ex.GAVector.BidAskRatio {
 		return "buyer"
 	}
 
-	// If ratio correct just pick one at random
-	if val, _ := rand.Int(rand.Reader, big.NewInt(10)); val.Int64() >= 5 {
-		return "seller"
-	}
+	return "seller"
+}
 
-	return "buyer"
+func (ex *Exchange) totalOrders() int {
+	return ex.bids + ex.asks
+}
+
+func (ex *Exchange) currentBA () float64 {
+	return float64(ex.bids) / float64(ex.totalOrders())
 }
 
 func (ex *Exchange) getRandomTrader(traderType string) int {
@@ -376,10 +357,10 @@ func (ex *Exchange) OrderComplies(order *common.Order, t int) (bool, string) {
 	//if !valid {
 	//	return valid, "Does not pass minimum increment"
 	//}
-	// EE shout improvemnt
+	//EE shout improvemnt
 	valid := ex.EEShoutImprovement(order)
 	if !valid {
-		return valid, "Does not pass minimum increment"
+		return valid, "Does not pass minimum EE increment"
 	}
 
 	valid = ex.MaxShift(order)
@@ -552,7 +533,6 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule, sAndD
 		for t := 0; t < ex.Info.MarketEnd; t++ {
 			log.Info("Time-step:", t)
 			ex.RenewExecOrders(t, d)
-
 			ok, order := ex.GetTraderOrder(t, d, experimentID)
 			if ok {
 				err := ex.orderBook.AddOrder(order)
@@ -575,6 +555,7 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule, sAndD
 			}
 
 			ex.MakeTrades(t, d)
+			ex.orderBook.SetBest()
 			ex.UpdateAgents(t, d)
 		}
 

@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import sys
 import glob
+from cycler import cycler
+from analytics import all_command
 
 def plot_elite_score(eid):
     f = '../logs/{}/elite.csv'.format(eid)
@@ -142,18 +144,57 @@ def plot_avg_genes(eid):
     axdo.grid()
 
 def plot_elite_genes(eid):
-    pass
+    f = '../logs/{}/elite.csv'.format(eid)
+    elites = pd.read_csv(filepath_or_buffer=f)
 
-def trades(eid, ep=None):
+    fig = plt.figure('Elite Genes')
+    axba = fig.add_subplot(231)
+    axba.plot(elites['Gen'], elites['B:A'], color='b', label='bid ask ratio')
+    axba.legend()
+    axba.grid()
+
+
+    axk = fig.add_subplot(232)
+    axk.plot(elites['Gen'], elites['K'], color='r', label='K-Pricing')
+    axk.legend()
+    axk.grid()
+
+
+    axw = fig.add_subplot(233)
+    axw.plot(elites['Gen'], elites['WindowSizeEE'], color='k', label='Window Size')
+    axw.legend()
+    axw.grid()
+
+    axde = fig.add_subplot(234)
+    axde.plot(elites['Gen'], elites['DeltaEE'], color='y', label='Delta')
+    axde.grid()
+
+    axm = fig.add_subplot(235)
+    axm.plot(elites['Gen'], elites['MaxShift'], color='c', label='Max Shift')
+    axm.legend()
+    axm.grid()
+
+    axdo = fig.add_subplot(236)
+    axdo.plot(elites['Gen'], elites['Dominance'], color='m', label='Dominance')
+    axdo.legend()
+    axdo.grid()
+
+def trades(eid, ep=None, data=None):
     f = '../logs/{}/TRADES.csv'.format(eid)
 
     trades = pd.read_csv(filepath_or_buffer=f)
     maxDay = trades['TradingDay'].max()
+    f, axes = plt.subplots(1, maxDay + 1, sharey=True)
+    f.suptitle("Trades")
+    axes[0].set_ylabel("Price")
     for d in range(maxDay + 1):
         ts = trades.loc[(trades['TradingDay'] == d)]
+        ax = axes[d]
 
-        figT = plt.figure("Trade Prices day {} / {}:".format(d, maxDay))
-        ax = figT.add_subplot(111)
+        if not data==None:
+            print("eff:", data['effsPD'][d])
+            ax.text(1,ts["Price"].min() - 5, "Eff:{:.3f}".format(data['effsPD'][d]))
+            ax.text(1,ts["Price"].min() - 2, "Alpha:{:.3f}".format(data['alphasPD'][d]))
 
         meanPrice = np.mean(ts["Price"])
         maxTimeStep = np.max(ts["TimeStep"])
@@ -161,16 +202,18 @@ def trades(eid, ep=None):
             maxTimeStep = 10
         timeSteps = [0, maxTimeStep + 1]
 
-        ax.plot(ts["TimeStep"], ts["Price"], 'ro', label="Trades")
+        ax.scatter(ts["TimeStep"], ts["Price"], color='r', label="Trades", marker='*')
         ax.plot(ts["TimeStep"], ts["Price"], 'r')
         ax.plot(timeSteps, [meanPrice, meanPrice], label="Mean trade price")
-        if (not ep == None) and (not ep == []):
-            ax.plot(timeSteps, [ep[0], ep[0]], linestyle ='--', color='g', label="Equilibirum Price")
+        if (not ep == None) and (d in ep.keys()):
+            print(ep)
+            ax.plot(timeSteps, [ep[d]['pe'], ep[d]['pe']], linestyle ='--', color='g', label="Equilibirum Price")
         ax.set_xlabel("Time Steps")
-        ax.set_ylabel("Price")
-        ax.set_xlim(timeSteps[0], timeSteps[1])
+        
+        ax.set_xlim(timeSteps[0], timeSteps[1]+10)
+        ax.set_title("Trades Day {}".format(d+1))
         ax.grid()
-        ax.legend()
+    axes[0].legend()
 
 def supplyDemand(eid):
     LpsF = '../logs/'+eid+'/LimitPrices.csv'
@@ -180,11 +223,22 @@ def supplyDemand(eid):
     sched = pd.read_csv(filepath_or_buffer=SchedsF)
     schedIds = sched['ScheduleID'].unique()
 
-    prices_times = []
+    prices_times = dict()
+
+    figSD = plt.figure("Supply demand curves")
+    ax = figSD.add_subplot(111)
+    ax.set_prop_cycle(cycler('color', ['r', 'g', 'b', 'y', 'c', 'm', 'y']))
+    ax.set_xlabel("Quantity")
+    ax.set_ylabel("Price")
+    maxX  =0 
+    maxY = 0
+    minY = 5000
     for id in schedIds:
         demand = lps.loc[(lps["TYPE"] == "BID") & (lps["ID"] == id)].sort_values(by=['LIMIT'],ascending=False).as_matrix(['LIMIT'])
         supply = lps.loc[(lps["TYPE"] == "ASK") & (lps["ID"] == id)].sort_values(by=['LIMIT'],ascending=True).as_matrix(['LIMIT'])
 
+        days = sched.loc[(sched['ScheduleID'] == id)].as_matrix(['TradingDay']).flatten().tolist()
+    
         quantityD = np.asarray(range(0,len(demand[:,0])+1, 1))
         quantityS = np.asarray(range(0,len(supply[:,0])+1, 1))
         found = False
@@ -209,35 +263,45 @@ def supplyDemand(eid):
                 qe = (di + si)/2.0
 
        
-        figSD = plt.figure("Supply demand curve #{}".format(id))
-        ax = figSD.add_subplot(111)
-        ax.set_xlabel("Quantity")
-        ax.set_ylabel("Price")
-        ax.set_xlim((0, (max(quantityD[-1], quantityS[-1])+1)))
-        ax.set_ylim(min(demand[-1], supply[0]) - 5, max(demand[0], supply[-1]) + 5)
-        ax.grid()
+        if maxX < (max(quantityD[-1], quantityS[-1])+1):
+            maxX = max(quantityD[-1], quantityS[-1])+1
+
+        if maxY < (max(demand[0], supply[-1]) + 5):
+            maxY = max(demand[0], supply[-1]) + 5
+
+        if minY > (min(demand[-1], supply[0]) - 5):
+            minY = min(demand[-1], supply[0]) - 5
+
+        
         dee = demand[:,0].tolist()
         suu = supply[:,0].tolist()
         dee = [dee[0]] + dee
         suu = [suu[0]] + suu
         print(dee)
         step = 1
-        limit = max(quantityD[-1], quantityS[-1])+1
-        if limit >= 50:
-            step = 2
-        if limit >=100:
-            step = 5
-        ax.xaxis.set_ticks(range(0, limit, step))
-        ax.step(quantityD, dee, 'r', label="demand")
-        ax.step(quantityS, suu, 'g', label="supply")
+        ax.step(quantityD, dee, label="demand " +str(id))
+        ax.step(quantityS, suu, label="supply"+str(id))
 
         if found:
-            ax.plot([0, qe], [pe, pe], linestyle='--', color="b")
-            ax.plot([qe,qe], [0, pe], linestyle='--', color="b")
+            pex = pe[0]
+            ax.plot([0, qe], [pex, pex], linestyle='--', color="k")
+            ax.plot([qe,qe], [0, pex], linestyle='--', color="k")
             print(pe)
-            prices_times.append(pe)
-        ax.legend()
-    
+            for d in days:
+                prices_times[d] = {'pe':pex, 'qe':qe}
+        
+
+    ax.set_xlim(0, maxX)
+    ax.set_ylim(minY, maxY)
+    step = 1
+    if maxX >= 50:
+        step = 2
+    if maxX >=100:
+        step = 5
+    ax.xaxis.set_ticks(range(0, maxX+step+1, step))
+    ax.grid()
+    ax.legend()
+
     return prices_times
 
 
@@ -254,11 +318,14 @@ def main():
         elif action == "sd":
             supplyDemand(eid)
         elif action == "sdt":
+            data = all_command(eid)
+            print(data)
             pricesTimes = supplyDemand(eid)
-            trades(eid, pricesTimes)
+            trades(eid, pricesTimes, data=data)
         elif action == "gen-score":
             plot_gen_scores(eid)
             plot_avg_genes(eid)
+            plot_elite_genes(eid)
         else:
             print("Commands [sd, sdt, gen-score]")
             return

@@ -38,7 +38,7 @@ def ibmTest(rootP, root1, its=100, days=5):
                summ += (p - ep) ** 2
 
             if len(tradesDi.index) > 0:
-                summ / len(tradesDi.index)
+                summ = summ / len(tradesDi.index)
 
             # caluclate alpha for day d in experiment i
             alphas[d,i] = (100.0 / ep) * (summ **0.5)
@@ -123,7 +123,7 @@ def effSingle(rootP, days=5):
             summ += (p - ep) ** 2
 
         if len(tradesDi.index) > 0:
-            summ / len(tradesDi.index)
+            summ = summ / len(tradesDi.index)
 
         # caluclate alpha for day d in experiment i
         alphas[d] = (100.0 / ep) * (summ **0.5)
@@ -274,7 +274,7 @@ def all_command(eid, days=5):
             summ += (p - metadata['eqP']) ** 2
 
         if len(tradesDi.index) > 0:
-            summ / len(tradesDi.index)
+            summ = summ / len(tradesDi.index)
 
         # caluclate alpha for day d in experiment i
         alphas[d] = (100.0 / metadata['eqP']) * (summ **0.5)
@@ -300,7 +300,7 @@ def all_command(eid, days=5):
     print('Efficency: {:.3f} +- {:.2f}'.format(np.nanmean(efficencys), np.nanstd(efficencys)))
     print('Trade Ratio: {:.3f} +- {:.2f}'.format(numtrades.mean(), numtrades.std()))
     print('Avg Price: {:.3f} +- {:.2f}'.format(np.nanmean(avgTps), np.nanstd(avgTps)))
-    print('Alpha: {:.3f} +- {:.2f}'.format(np.nanmean(alphas), np.nanstd(alphas)))
+    print('Alpha: {:.3f} +- {:.2f}'.format(np.mean(alphas), np.std(alphas)))
 
     data = {
         'eff': np.nanmean(efficencys),
@@ -320,6 +320,7 @@ def all_command(eid, days=5):
 
     with open('../logs/'+eid+'/analytics.json', 'w') as out:
         json.dump(data, out, indent=4)
+    return data
 
 def multiRun_command(eid, days=5, its=100):
     efficencys = np.zeros((days, its))
@@ -351,7 +352,7 @@ def multiRun_command(eid, days=5, its=100):
                 summ += (p - metadata['eqP']) ** 2
 
             if len(tradesDi.index) > 0:
-                summ / len(tradesDi.index)
+                summ = summ / len(tradesDi.index)
 
             # caluclate alpha for day d in experiment i
             alphas[d, i] = (100.0 / metadata['eqP']) * (summ **0.5)
@@ -444,7 +445,7 @@ def main():
             its =100
             if len(sys.argv) >= 4:
                 days = int(sys.argv[3])
-                if len(sys.argv >=5):
+                if len(sys.argv) >=5:
                     its=int(sys.argv[4])
             multiRun_command(eid, days=days, its=its)
 

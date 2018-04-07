@@ -38,6 +38,7 @@ type ConfigFile struct {
 	EP           float64           `json:"EP, omitempty"`
 	SandDs map[int]exchange.SandD
 	Sched []exchange.SchedToPrices `json:"Schedule, omitempty"`
+	SchedTimes []SchedTimes `json:"SchedTimes, omitempty"`
 }
 
 func init() {
@@ -173,6 +174,12 @@ type ExperimentConfig struct {
 	BLP []exchange.AgentLimitPrices `json:"BLimitPrices, omitempty"`
 	AlgoS        []string          `json:"AlgoS"`
 	AlgoB        []string          `json:"AlgoB"`
+}
+
+type SchedTimes struct {
+	Days []int `json:"Days"`
+	TimeSteps []int `json:"TimeSteps"`
+	SchedID int `json:"SchedID"`
 }
 
 func checkFlags(c *cli.Context) ExperimentConfig {
@@ -361,7 +368,8 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 		}
 	}
 
-	sched, sand := generateSchedule(configFile.ScheduleType,configFile.SellerIDs, configFile.BuyerIDs, configFile.Sched, configFile.Days)
+	sched, sand := generateSchedule(configFile.ScheduleType,configFile.SellerIDs, configFile.BuyerIDs, configFile.Sched,
+		configFile.Days, configFile.SchedTimes)
 	return ExperimentConfig{
 		EID:        configFile.EID,
 		GA:         configFile.GA,
@@ -399,10 +407,14 @@ func experiment(c *cli.Context) {
 // For now only standard supported
 // Standard schedule all traders get the same units at the start of the trading day
 // To be supported [MarketShock, stepped]
-func generateSchedule(schedType string, sellerIDs, buyerIDs []int, schedAndPrices []exchange.SchedToPrices, days int) (exchange.AllocationSchedule, map[int]exchange.SandD) {
+func generateSchedule(schedType string, sellerIDs, buyerIDs []int, schedAndPrices []exchange.SchedToPrices, days int,
+	schedTimes []SchedTimes) (exchange.AllocationSchedule, map[int]exchange.SandD) {
 	switch schedType {
 	case "STANDARD":
 		return generateStandardSched(sellerIDs, buyerIDs, schedAndPrices[0], days)
+	case "CUSTOM":
+		m := mapifySchedToPrice(schedAndPrices)
+		return generateCustomSched(sellerIDs, buyerIDs,m, schedTimes, days)
 	default:
 		log.WithFields(log.Fields{
 			"Valid options": "[STANDARD]",
@@ -438,6 +450,44 @@ func generateStandardSched(sellerIDs, buyerIDs []int, schedAndPrices exchange.Sc
 	return allocSched, sMap
 }
 
+func generateCustomSched(sellerIDs, buyerIDs []int, schedAndPrices map[int]exchange.SchedToPrices, schedTimes []SchedTimes, days int)(exchange.AllocationSchedule, map[int]exchange.SandD) {
+
+	allocSched := exchange.AllocationSchedule{
+		Schedule: make(map[int]map[int]int),
+	}
+
+	for d:=0; d< days; d++ {
+		allocSched.Schedule[d] = make(map[int]int)
+	}
+
+	sMap := make(map[int]exchange.SandD)
+	for _, st := range schedTimes {
+		for _, ts := range st.TimeSteps {
+			for _, d := range st.Days {
+				allocSched.Schedule[d][ts] = st.SchedID
+			}
+		}
+
+		sMap[st.SchedID] = exchange.SandD{
+			ID: st.SchedID,
+			SIDs: sellerIDs,
+			BIDs: buyerIDs,
+			Sps: schedAndPrices[st.SchedID].SLimitPrices,
+			Bps: schedAndPrices[st.SchedID].BLimitPrices,
+		}
+	}
+
+	return allocSched, sMap
+}
+
+func mapifySchedToPrice (s []exchange.SchedToPrices) (map[int]exchange.SchedToPrices){
+	r := make(map[int]exchange.SchedToPrices)
+	for _, v := range s {
+		r[v.SID] = v
+	}
+	return r
+}
+
 type float64arr []float64
 
 func (a float64arr) Len() int           { return len(a) }
@@ -461,13 +511,13 @@ func startGA(c *cli.Context) {
 }
 
 func itRun(c *cli.Context) {
-	runs := 100
+	runs := 500
 	for i := 0; i < runs; i++ {
 		log.Warn("Run:", i)
 		config := checkFlags(c)
 		ex := exchange.Exchange{}
 		ex.Init(config.GA, config.MarketInfo, config.SellersIDs, config.BuyersIDs)
-		ex.SetTraders(config.Agents)
+		ex.SetTraders(ReMakeAgents(config))
 		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule, config.SandDs)
 	}
 }
@@ -489,4 +539,47 @@ func itGA(c *cli.Context) {
 		}
 		ga.Start()
 	}
+}
+
+
+func ReMakeAgents(Config ExperimentConfig) map[int]bots.RobotTrader {
+	traders := make(map[int]bots.RobotTrader)
+	for i, id := range Config.SellersIDs {
+		switch Config.AlgoS[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "SELLER", Config.MarketInfo)
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "SELLER", Config.MarketInfo)
+			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.AATrader{}
+			aa.InitRobotCore(id, "SELLER", Config.MarketInfo)
+			traders[aa.Info.TraderID] = aa
+		default:
+			log.Panic("SHIIT")
+		}
+	}
+
+	for i, id := range Config.BuyersIDs {
+		switch Config.AlgoB[i] {
+		case "ZIP":
+			zipT := &bots.ZIPTrader{}
+			zipT.InitRobotCore(id, "BUYER", Config.MarketInfo)
+			traders[zipT.Info.TraderID] = zipT
+		case "ZIC":
+			zic := &bots.ZICTrader{}
+			zic.InitRobotCore(id, "BUYER", Config.MarketInfo)
+			traders[zic.Info.TraderID] = zic
+		case "AA":
+			aa := &bots.AATrader{}
+			aa.InitRobotCore(id, "BUYER", Config.MarketInfo)
+			traders[aa.Info.TraderID] = aa
+		default:
+			log.Panic("SHIIT")
+		}
+	}
+	return traders
 }

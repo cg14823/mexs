@@ -61,7 +61,8 @@ type RobotTrader interface {
 	AddOrder(order *TraderOrder)
 	// Remove first Order
 	RemoveOrder() error
-	TradeMade(trade *common.Trade) bool
+	// Should return their limit prices for logging reasons
+	TradeMade(trade *common.Trade) (bool, float64)
 	MarketUpdate(update common.MarketUpdate)
 	GetOrder(timeStep int) *common.Order
 	GetExecutionOrder() []*TraderOrder

@@ -31,7 +31,7 @@ def calulcate_eq_price(sPrices=[], bPrices=[]):
     
     return eqP
 
-def get_iprices_and_eq(starts=100, ends=200, startb=100, endb=200, ns=100, nb=100):
+def get_iprices_and_eq(starts=50, ends=150, startb=50, endb=150, ns=100, nb=100):
     sellers = uniform_random_iprices(starts, ends, ns)
     buyers = uniform_random_iprices(startb, endb, nb)
 
@@ -73,11 +73,22 @@ def get_iprices_and_eq(starts=100, ends=200, startb=100, endb=200, ns=100, nb=10
 
 
 sellers, buyers, eq = get_iprices_and_eq()
-
+print('"SLimitPrices": [')
+i = 0
 for x in sellers:
-    print("s :", x)
+    print("  {")
+    print('    "ID": '+str(i)+',')
+    print('    "LimitPrice": '+ str(x))
+    print("  },")
+    i +=1
 
+print("],")
+print('"BLimitPrices": [')
 for y in buyers:
-    print("b:", y)
-
+    print("  {")
+    print('    "ID": '+str(i)+',')
+    print('    "LimitPrice": '+ str(y))
+    print("  },")
+    i+=1
+print("]")
 print("EQ:", eq)
