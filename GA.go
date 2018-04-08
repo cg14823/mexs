@@ -196,7 +196,7 @@ func (g *GA) getChildGenes(scores []float64, low bool) exchange.AuctionParameter
 	var maxS float64
 	var dom int
 	// KPricing mutation is in range of [-0.05, 0.05] with limits [0,1]
-	kp = mutateFloatSimple(mom.KPricing, dad.KPricing, 0.0, 1.0, g.MutationRate, 0.5, 0.05. -0.05)
+	kp = mutateFloatSimple(mom.KPricing, dad.KPricing, 0.0, 1.0, g.MutationRate, 0.5, 0.05, -0.05)
 
 	// MinIncrement mutation is in range of [-0.5, 0.5] with limit [0, 20]
 	minI = mom.MinIncrement
@@ -375,6 +375,7 @@ func (g *GA) efficiency(trades []tradeLPs) float64 {
 		effs[d] = effs[d] / (g.EqSched[d].bSurplus + g.EqSched[d].sSurplus)
 		eff += effs[d]
 	}
+
 	eff = eff / float64(g.Config.MarketInfo.TradingDays)
 
 	log.WithFields(log.Fields{
@@ -752,12 +753,12 @@ func calculateAllEQ(sched exchange.AllocationSchedule, SAndDs map[int]exchange.S
 
 	for d, _ := range sched.Schedule {
 		for _ , sid := range sched.Schedule[d] {
-			if _, ok := results[sid]; !ok {
+			if _, ok := results[d]; !ok {
 				data, err := calculateSchedEQ(SAndDs[sid])
 				if err != nil {
 					log.Panic("The stats could not be calculated for schedule ", sid)
 				}
-				results[sid] = data
+				results[d] = data
 			}
 		}
 	}
@@ -826,7 +827,7 @@ func calculateMaxSurplus(sps, bps []float64, pe float64) (float64, float64) {
 
 	for _, v := range bps {
 		if v > pe {
-			sMaxSurplus += v - pe
+			bMaxSurplus += v - pe
 		}
 	}
 
