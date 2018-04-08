@@ -93,6 +93,7 @@ type Exchange struct {
 	tradeRecordPrice []float64
 	SandDs map[int]SandD
 	Alloc AllocationSchedule
+	LogAll bool
 }
 
 func (ex *Exchange) Init(GAVector AuctionParameters, Info common.MarketInfo, sellers, buyers []int) {
@@ -212,7 +213,9 @@ func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 				ex.asks++
 			}
 			log.Debugf("Bids ask %d:%d", ex.bids, ex.asks)
-			logOrderToCSV(order, d, eid, "TRUE", "N/A")
+			if (ex.LogAll) {
+				logOrderToCSV(order, d, eid, "TRUE", "N/A")
+			}
 			return true, order
 		}
 
@@ -223,7 +226,9 @@ func (ex *Exchange) GetTraderOrder(t, d int, eid string) (bool, *common.Order) {
 			"TraderID":         traderID,
 			"Agent has orders": len(agent.GetExecutionOrder()),
 		}).Debug("Order did not comply")
-		logOrderToCSV(order, d, eid, "FALSE", reason)
+		if (ex.LogAll) {
+			logOrderToCSV(order, d, eid, "FALSE", reason)
+		}
 	}
 	return false, &common.Order{}
 }
@@ -524,7 +529,10 @@ func (ex *Exchange) StartMarket(experimentID string, s AllocationSchedule, sAndD
 			"Error": err.Error(),
 		}).Error("Log Folder for this experiment could not be made")
 	}
-	ex.ScheduleToCSV(experimentID)
+
+	if (ex.LogAll) {
+		ex.ScheduleToCSV(experimentID)
+	}
 
 	for d := 0; d < ex.Info.TradingDays; d++ {
 		ex.orderBook.Reset()

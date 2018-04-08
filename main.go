@@ -396,7 +396,7 @@ func getConfigFile(fileName string, c *cli.Context) ExperimentConfig {
 func experiment(c *cli.Context) {
 	eConfig := checkFlags(c)
 	log.Debug("Number of traders is:", len(eConfig.Agents))
-	ex := exchange.Exchange{}
+	ex := exchange.Exchange{LogAll:true}
 	ex.Init(eConfig.GA, eConfig.MarketInfo, eConfig.SellersIDs, eConfig.BuyersIDs)
 	ex.SetTraders(eConfig.Agents)
 	ex.StartMarket(eConfig.EID, eConfig.Schedule, eConfig.SandDs)
@@ -515,7 +515,7 @@ func itRun(c *cli.Context) {
 	for i := 0; i < runs; i++ {
 		log.Warn("Run:", i)
 		config := checkFlags(c)
-		ex := exchange.Exchange{}
+		ex := exchange.Exchange{LogAll:true}
 		ex.Init(config.GA, config.MarketInfo, config.SellersIDs, config.BuyersIDs)
 		ex.SetTraders(ReMakeAgents(config))
 		ex.StartMarket(config.EID+"_"+strconv.Itoa(i), config.Schedule, config.SandDs)
